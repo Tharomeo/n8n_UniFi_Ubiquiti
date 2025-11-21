@@ -1,0 +1,724 @@
+{
+  "name": "Ubiquiti_New",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -336,
+        0
+      ],
+      "id": "7f04e95c-7403-4667-82f2-8927507e6282",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "url": "https://api.ui.com/v1/hosts",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-KEY",
+              "value": "F8ZvNVVkaDyKfK6HeOZM6RO4iNaPNQzC"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -128,
+        0
+      ],
+      "id": "0a55dd07-15fe-40e9-8899-c26a9a855ee1",
+      "name": "GetUbiquitiDevices",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        352,
+        0
+      ],
+      "id": "c0b45173-3684-44ce-a74d-188f9c56c449",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "jsCode": "return $node[\"GetUbiquitiDevices\"].json.data;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        80,
+        0
+      ],
+      "id": "96b9b90f-b5fc-41ea-bee6-2814102136f3",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "246ecf41-eb21-4a5a-8b24-a44914055694",
+              "leftValue": "={{ $json.reportedState.state }}",
+              "rightValue": "disconnected",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        592,
+        48
+      ],
+      "id": "47507eb3-9e6e-405b-82e9-2f5318312e69",
+      "name": "FiltraOffline"
+    },
+    {
+      "parameters": {
+        "fromEmail": "testeitease488@gmail.com",
+        "toEmail": "=thais.goncalves@itease.com.br",
+        "subject": "={{ $json.tituloChamado }}",
+        "html": "={{ $json.descricaoChamado }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1504,
+        48
+      ],
+      "id": "fdb0309c-a619-4a2e-b60c-bb27eca865db",
+      "name": "Envia E-mail Queda",
+      "webhookId": "36115061-64bb-4ea2-8c44-00292cc5b0de",
+      "credentials": {
+        "smtp": {
+          "id": "uL0IJTXM6hMteM7r",
+          "name": "SMTP account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "dispositivos_offline",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "device_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        784,
+        352
+      ],
+      "id": "5731fca3-d12a-4042-93bf-ed999dc939a2",
+      "name": "Verifica Restauracao",
+      "alwaysOutputData": false,
+      "credentials": {
+        "supabaseApi": {
+          "id": "lzQLPzfafRfXEtM0",
+          "name": "Supabase account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "3db2ffef-9350-48ed-90ae-efc7c2b5b0d8",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        992,
+        352
+      ],
+      "id": "ae19b50c-6538-4485-90bb-27ea77a71b45",
+      "name": "Decide Restauracao"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "8f89529b-edd8-4627-8711-7885b4b71d4f",
+              "name": "tituloChamado",
+              "value": "=✅ Sinal Restaurado: {{ $json.device_name }} está ONLINE!",
+              "type": "string"
+            },
+            {
+              "id": "ccccb415-b2da-4c13-ad11-717a96ca9ae8",
+              "name": "descricaoChamado",
+              "value": "=<div style=\"font-family: Arial, sans-serif; padding: 25px; border: 1px solid #e0e0e0; border-radius: 8px; max-width: 600px; margin: auto; background-color: #f0fff0;\">   <h2 style=\"color: #27ae60; border-bottom: 2px solid #27ae60; padding-bottom: 10px;\">👍 Notificação de Restauração</h2>   <p>Boas notícias! O dispositivo <strong>{{ $json.device_name }}</strong> está online novamente.</p>   <div style=\"background-color: #ffffff; border: 1px solid #dddddd; padding: 15px; border-radius: 5px; margin-top: 15px;\">     <p style=\"margin: 5px 0;\"><strong>ID do Dispositivo:</strong> {{ $json.device_id }}</p>     <p style=\"margin: 5px 0;\"><strong>Horário da Detecção:</strong> {{ new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) }}</p>   </div> </div>",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1232,
+        336
+      ],
+      "id": "7dbd4def-186f-4aaf-8827-4f1e859b5c0e",
+      "name": "Cria Variaveis Restauracao"
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "tableId": "dispositivos_offline",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "device_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Decide Restauracao').item.json.device_id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2000,
+        336
+      ],
+      "id": "c36020a2-59a6-462c-9139-f9e1df65bb12",
+      "name": "Remove Registro Restaurado",
+      "credentials": {
+        "supabaseApi": {
+          "id": "lzQLPzfafRfXEtM0",
+          "name": "Supabase account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "device_outages",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "device_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Decide Restauracao').item.json.device_id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "end_time",
+              "fieldValue": "={{ $json.end_time }}"
+            },
+            {
+              "fieldId": "duration_minutes",
+              "fieldValue": "={{ $json.duration_minutes }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1824,
+        336
+      ],
+      "id": "91b9adcf-25e7-4219-89f1-98cde28d2bf5",
+      "name": "Atualiza Registro Restaurado",
+      "credentials": {
+        "supabaseApi": {
+          "id": "lzQLPzfafRfXEtM0",
+          "name": "Supabase account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. Inicializa as variáveis de tempo\nconst startTime = new Date($('Decide Restauracao').first().json.created_at);\nconst endTime = new Date(); // Data e hora atual\n\nlet durationMinutes = 0; // Inicializa com 0\nlet diffMs = null;\n\n// 2. Verifica se a data de início é válida antes de calcular\n// A forma mais segura de verificar a validade de um objeto Date é checar se getTime() não é NaN\nif (!isNaN(startTime.getTime())) {\n    diffMs = endTime - startTime; // Diferença em milissegundos\n    // Math.round para garantir que a duração seja um número inteiro (como na sua tabela SQL)\n    durationMinutes = Math.round(diffMs / (1000 * 60)); \n} \n// Se a data for inválida, durationMinutes permanece 0.\n\n// 3. Adiciona os novos campos ao item atual\n$json.end_time = endTime.toISOString();\n$json.duration_minutes = durationMinutes;\n\nreturn $json;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1632,
+        336
+      ],
+      "id": "eff5ec5f-ea2c-4a97-bf5c-5275b582da16",
+      "name": "Calcula Duracao"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "09ec158a-1525-4dee-9526-e91c68577e63",
+              "name": "tituloChamado",
+              "value": "=Alerta: Dispositivo {{ $('FiltraOffline').item.json.reportedState.name }} está offline!",
+              "type": "string"
+            },
+            {
+              "id": "6e7f3ac9-a3dd-44ed-99f7-9b48942f0dc4",
+              "name": "descricaoChamado",
+              "value": "=<div style=\"font-family: Arial, sans-serif; padding: 25px; border: 1px solid #e0e0e0; border-radius: 8px; max-width: 600px; margin: auto; background-color: #fff0f0;\">\n  <h2 style=\"color: #e74c3c; border-bottom: 2px solid #e74c3c; padding-bottom: 10px;\">🚨 Alerta de Queda</h2>\n  <p>O dispositivo <strong> {{ $('FiltraOffline').item.json.reportedState.name }} </strong> foi detectado como OFFLINE.</p>\n  <div style=\"background-color: #ffffff; border: 1px solid #dddddd; padding: 15px; border-radius: 5px; margin-top: 15px;\">\n    <p style=\"margin: 5px 0;\"><strong>ID do Dispositivo:</strong> {{ $('FiltraOffline').item.json.id }} </p>\n    <p style=\"margin: 5px 0;\"><strong>MAC Address:</strong> </p>\n    <p style=\"margin: 5px 0;\"><strong>Horário da Detecção:</strong> {{ new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) }}</p>\n  </div>\n  <p style=\"margin-top: 20px; font-size: 0.9em; color: #777;\">Uma notificação de restauração será enviada quando o dispositivo voltar a ficar online.</p>\n</div>\n",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1280,
+        48
+      ],
+      "id": "35d46195-49c2-4b2b-bc29-7ef35b6a1a97",
+      "name": "Cria Variaveis Queda",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "fromEmail": "testeitease488@gmail.com",
+        "toEmail": "=thais.goncalves@itease.com.br",
+        "subject": "={{ $json.tituloChamado }}",
+        "html": "={{ $json.descricaoChamado }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1424,
+        336
+      ],
+      "id": "6ea58f47-3cde-4bdf-baf9-6b1cc84fed55",
+      "name": "Envia E-mail Restauracao",
+      "webhookId": "36115061-64bb-4ea2-8c44-00292cc5b0de",
+      "credentials": {
+        "smtp": {
+          "id": "uL0IJTXM6hMteM7r",
+          "name": "SMTP account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "tableId": "dispositivos_offline",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "device_id",
+              "fieldValue": "={{ $('FiltraOffline').item.json.id }}"
+            },
+            {
+              "fieldId": "device_name",
+              "fieldValue": "={{ $('FiltraOffline').item.json.reportedState.name }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1696,
+        48
+      ],
+      "id": "6613ff69-1993-4fce-a903-4b4a087fe356",
+      "name": "Cria Tabela Offline",
+      "credentials": {
+        "supabaseApi": {
+          "id": "lzQLPzfafRfXEtM0",
+          "name": "Supabase account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "dispositivos_offline",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "device_id",
+              "condition": "eq",
+              "keyValue": "={{ $node[\"FiltraOffline\"].json.id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        848,
+        64
+      ],
+      "id": "a08fd4a7-3411-4f7f-808f-3f668b58a415",
+      "name": "Puxa Dados Tabela Offline",
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "lzQLPzfafRfXEtM0",
+          "name": "Supabase account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "73986506-4450-482b-930e-f9da4f884b41",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": 1,
+              "operator": {
+                "type": "number",
+                "operation": "empty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1040,
+        64
+      ],
+      "id": "4b47b176-432a-4853-83a5-b80f5a9f2595",
+      "name": "Verifica Se Já Foi Enviado Aviso"
+    },
+    {
+      "parameters": {
+        "tableId": "device_outages",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "device_id",
+              "fieldValue": "={{ $json.device_id }}"
+            },
+            {
+              "fieldId": "device_name",
+              "fieldValue": "={{ $json.device_name }}"
+            },
+            {
+              "fieldId": "start_time",
+              "fieldValue": "={{$now}}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1904,
+        48
+      ],
+      "id": "b80bfff5-3b26-4857-af46-4d2cc34c9400",
+      "name": "Cria Memoria de Quedas",
+      "credentials": {
+        "supabaseApi": {
+          "id": "lzQLPzfafRfXEtM0",
+          "name": "Supabase account 2"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "GetUbiquitiDevices",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GetUbiquitiDevices": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [],
+        [
+          {
+            "node": "FiltraOffline",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Envia E-mail Queda": {
+      "main": [
+        [
+          {
+            "node": "Cria Tabela Offline",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FiltraOffline": {
+      "main": [
+        [
+          {
+            "node": "Puxa Dados Tabela Offline",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Verifica Restauracao",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verifica Restauracao": {
+      "main": [
+        [
+          {
+            "node": "Decide Restauracao",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cria Variaveis Restauracao": {
+      "main": [
+        [
+          {
+            "node": "Envia E-mail Restauracao",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Decide Restauracao": {
+      "main": [
+        [
+          {
+            "node": "Cria Variaveis Restauracao",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Remove Registro Restaurado": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Atualiza Registro Restaurado": {
+      "main": [
+        [
+          {
+            "node": "Remove Registro Restaurado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calcula Duracao": {
+      "main": [
+        [
+          {
+            "node": "Atualiza Registro Restaurado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cria Variaveis Queda": {
+      "main": [
+        [
+          {
+            "node": "Envia E-mail Queda",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Envia E-mail Restauracao": {
+      "main": [
+        [
+          {
+            "node": "Calcula Duracao",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cria Tabela Offline": {
+      "main": [
+        [
+          {
+            "node": "Cria Memoria de Quedas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Puxa Dados Tabela Offline": {
+      "main": [
+        [
+          {
+            "node": "Verifica Se Já Foi Enviado Aviso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verifica Se Já Foi Enviado Aviso": {
+      "main": [
+        [
+          {
+            "node": "Cria Variaveis Queda",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cria Memoria de Quedas": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "266df68f-1b03-4f68-ae67-efcf3a5c113a",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "185ba077e1c7b20c2b36283e5c616bb88d4b39bfffda32bf938f85eecc433603"
+  },
+  "id": "dOJghAgXW4d2RlKW",
+  "tags": []
+}

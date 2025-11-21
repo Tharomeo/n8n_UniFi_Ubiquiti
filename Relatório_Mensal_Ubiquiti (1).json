@@ -1,0 +1,257 @@
+{
+  "name": "Relatório_Mensal_Ubiquiti",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "months"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "f5191904-1c67-4496-97eb-35cd90cbab47",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Pega todos os itens brutos do nó anterior (Get many rows)\nconst items = $input.all();\n\n// Se não houver dados, retorna um resultado vazio para parar o fluxo.\nif (items.length === 0) {\n  return [{\n    json: {\n      html: \"<h1>Nenhum dado encontrado para o período.</h1>\",\n      fileName: \"relatorio_sem_dados.pdf\"\n    }\n  }];\n}\n\n// Extrai os dados JSON de cada item de entrada.\nconst eventos = items.map(item => item.json);\n\n// --- 1. AGREGAÇÃO DOS DADOS (A GRANDE MUDANÇA) ---\n// Objeto para armazenar os dados agregados por dispositivo\nconst dispositivosAgregados = {};\n\nfor (const evento of eventos) {\n  const nome = evento.device_name;\n  const duracao = evento.duration_minutes || 0; // Garante que a duração seja um número\n\n  // Se o dispositivo ainda não foi visto, inicializa ele\n  if (!dispositivosAgregados[nome]) {\n    dispositivosAgregados[nome] = {\n      device_name: nome,\n      total_quedas: 0,\n      total_minutos_offline: 0\n    };\n  }\n\n  // Incrementa os contadores para o dispositivo atual\n  dispositivosAgregados[nome].total_quedas += 1;\n  dispositivosAgregados[nome].total_minutos_offline += duracao;\n}\n\n// Converte o objeto de volta para um array, que é mais fácil de manipular\nconst dadosAgregados = Object.values(dispositivosAgregados);\n\n// --- 2. CÁLCULO DO RESUMO (agora sobre os dados agregados) ---\nlet somaTotalMinutos = 0;\nlet dispositivoMaisQuedas = { device_name: 'N/A', total_quedas: -1 };\nlet dispositivoMaisTempoOff = { device_name: 'N/A', total_minutos_offline: -1 };\n\nfor (const dispositivo of dadosAgregados) {\n  somaTotalMinutos += dispositivo.total_minutos_offline;\n\n  if (dispositivo.total_quedas > dispositivoMaisQuedas.total_quedas) {\n    dispositivoMaisQuedas = dispositivo;\n  }\n\n  if (dispositivo.total_minutos_offline > dispositivoMaisTempoOff.total_minutos_offline) {\n    dispositivoMaisTempoOff = dispositivo;\n  }\n}\n\nconst totalDispositivosUnicos = dadosAgregados.length;\n\n// --- 3. GERAÇÃO DO NOME DINÂMICO DO ARQUIVO ---\nconst today = new Date();\ntoday.setDate(1);\ntoday.setDate(today.getDate() - 1);\nconst monthName = today.toLocaleString('pt-BR', { month: 'long' });\nconst year = today.getFullYear();\nconst capitalizedMonth = monthName.charAt(0).toUpperCase() + monthName.slice(1);\nconst fileName = `Relatorio_Mensal_Dispositivos_Ubiquiti-${capitalizedMonth}-${year}.pdf`;\n\n// --- 4. GERAÇÃO DO HTML COMPLETO ---\n\nfunction generateTableRows(items) {\n  let rows = '';\n  // Ordena os dados por número de quedas para a tabela\n  const sortedItems = [...items].sort((a, b) => b.total_quedas - a.total_quedas);\n  for (const item of sortedItems) {\n    rows += `\n      <tr>\n        <td>${item.device_name}</td>\n        <td>${item.total_quedas}</td>\n        <td>${item.total_minutos_offline}</td>\n      </tr>\n    `;\n  }\n  return rows;\n}\n\nconst html = `\n<html>\n<head>\n    <meta charset=\"UTF-8\">\n    <style>\n        body { font-family: Helvetica, Arial, sans-serif; margin: 40px; color: #333; }\n        h1 { color: #1a1a1a; border-bottom: 2px solid #f2f2f2; padding-bottom: 10px; font-size: 24px; }\n        h2 { font-size: 20px; color: #333; margin-top: 30px; }\n        .summary { background-color: #f9f9f9; border: 1px solid #eee; padding: 20px; border-radius: 8px; }\n        .summary p { margin: 0; padding: 8px 0; font-size: 16px; border-bottom: 1px solid #eee; }\n        .summary p:last-child { border-bottom: none; }\n        .summary strong { color: #000; min-width: 250px; display: inline-block; }\n        table { width: 100%; border-collapse: collapse; margin-top: 20px; }\n        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; font-size: 14px; }\n        thead { background-color: #4A4A4A; color: white; }\n        tr:nth-child(even) { background-color: #f9f9f9; }\n    </style>\n</head>\n<body>\n    <h1>Relatório Mensal de Dispositivos Offline</h1>\n    <div class=\"summary\">\n        <h2>Resumo do Mês (${capitalizedMonth} de ${year})</h2>\n        <p><strong>Total de Dispositivos com Quedas:</strong> ${totalDispositivosUnicos}</p>\n        <p><strong>Soma Total de Minutos Offline:</strong> ${somaTotalMinutos} minutos</p>\n        <p><strong>Dispositivo com Mais Quedas:</strong> ${dispositivoMaisQuedas.device_name} (${dispositivoMaisQuedas.total_quedas} quedas)</p>\n        <p><strong>Dispositivo com Mais Tempo Offline:</strong> ${dispositivoMaisTempoOff.device_name} (${dispositivoMaisTempoOff.total_minutos_offline} minutos)</p>\n    </div>\n    <h2>Detalhes de Todos os Dispositivos</h2>\n    <table>\n        <thead>\n            <tr>\n                <th>Nome do Dispositivo</th>\n                <th>Nº de Quedas</th>\n                <th>Total de Minutos Offline</th>\n            </tr>\n        </thead>\n        <tbody>\n            ${generateTableRows(dadosAgregados)}\n        </tbody>\n    </table>\n</body>\n</html>\n`;\n\n// --- 5. RETORNO DOS DADOS PARA O PRÓXIMO NÓ ---\nreturn [{\n  json: {\n    html: html,\n    fileName: fileName,\n    summary: {\n        totalDispositivos: totalDispositivosUnicos,\n        dispositivoMaisQuedas: `${dispositivoMaisQuedas.device_name} (${dispositivoMaisQuedas.total_quedas} quedas)`,\n        dispositivoMaisTempoOff: `${dispositivoMaisTempoOff.device_name} (${dispositivoMaisTempoOff.total_minutos_offline} minutos)`\n    }\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        192
+      ],
+      "id": "0e077ef2-cad5-4e9b-b48b-8a405ca335a0",
+      "name": "Processar e Estruturar"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.pdf.co/v1/pdf/convert/from/html",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "thais.goncalves@itease.com.br_spp4Ggz15UeunngVuHiua2KYXd1oNNmEgkn5qKaMau6gGkNOqsblcHk33x3VDfA2"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n  JSON.stringify({\n    \"html\": $json.html,\n    \"name\": $json.fileName,\n    \"inline\": true\n  })\n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        688,
+        -144
+      ],
+      "id": "a1a5233e-cdb5-4c56-b250-89718004f58e",
+      "name": "HTTP Request PDF"
+    },
+    {
+      "parameters": {
+        "fromEmail": "testeitease488@gmail.com",
+        "toEmail": "=thais.goncalves@itease.com.br",
+        "subject": "={{ $json.assuntoEmail }}",
+        "html": "={{ $json.corpoEmailHtml }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1344,
+        208
+      ],
+      "id": "883a729a-6b16-4c05-9f97-0c4cb0ee7204",
+      "name": "Envia E-mail Queda1",
+      "webhookId": "36115061-64bb-4ea2-8c44-00292cc5b0de",
+      "credentials": {
+        "smtp": {
+          "id": "uL0IJTXM6hMteM7r",
+          "name": "SMTP account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "8f89529b-edd8-4627-8711-7885b4b71d4f",
+              "name": "assuntoEmail",
+              "value": "=Relatório Mensal de Dispositivos - {{ $('HTTP Request PDF').item.json.name.replace('.pdf', '') }}",
+              "type": "string"
+            },
+            {
+              "id": "ccccb415-b2da-4c13-ad11-717a96ca9ae8",
+              "name": "corpoEmailHtml",
+              "value": "=<!DOCTYPE html>\n<html lang=\"pt-BR\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <style>\n        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f4f4f7; margin: 0; padding: 0; }\n        .container { max-width: 600px; margin: 20px auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; border: 1px solid #e2e2e2; }\n        .header { background-color: #0052cc; color: #ffffff; padding: 30px; text-align: center; }\n        .header h1 { margin: 0; font-size: 24px; }\n        .content { padding: 30px; color: #333333; line-height: 1.6; }\n        .content p { margin: 0 0 15px 0; }\n        .button-container { text-align: center; margin-top: 30px; }\n        .button { background-color: #28a745; color: #ffffff; padding: 15px 25px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; }\n        .footer { background-color: #f4f4f7; color: #888888; text-align: center; padding: 20px; font-size: 12px; }\n    </style>\n</head>\n<body>\n    <div class=\"container\">\n        <div class=\"header\"><h1>Relatório Mensal de Dispositivos</h1></div>\n        <div class=\"content\">\n            <p>Olá,</p>\n            <p>O relatório mensal de dispositivos offline foi gerado com sucesso e está disponível para download.</p>\n            \n            <!-- SEÇÃO DE RESUMO REMOVIDA -->\n\n            <div class=\"button-container\">\n                <a href=\"{{ $json.url }}\" class=\"button\" download>Baixar Relatório Completo (PDF)</a>\n            </div>\n            <p style=\"text-align:center; font-size:12px; color:#888; margin-top:15px;\">Nome do arquivo: {{ $json.name }}</p>\n        </div>\n        <div class=\"footer\"><p>Este é um e-mail automático gerado pelo sistema de monitoramento.</p></div>\n    </div>\n</body>\n</html>",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1152,
+        208
+      ],
+      "id": "fef872e4-d094-4895-ad2c-c82f37f63dfb",
+      "name": "Prepara E-mail"
+    },
+    {
+      "parameters": {
+        "content": "**Coleta e Geração do Relatório **\nFunção: Coleta os dados brutos do banco de dados e os converte em um relatório PDF finalizado.\n1. HTTP Request (Supabase): Realiza uma requisição GET à API do Supabase, executando a função get_monthly_report_v2. Esta função retorna um array JSON com os dados consolidados do último mês.\n2. HTTP Request PDF: Recebe o código HTML preparado pelo bloco verde e o envia via POST para a API do PDF.co. A API renderiza o HTML e retorna o arquivo PDF final como um dado binário, pronto para ser distribuído.",
+        "height": 336,
+        "width": 720,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        112,
+        -336
+      ],
+      "typeVersion": 1,
+      "id": "eaea255a-03ee-46ec-8407-ee073b2a4479",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "**Distribuição do Relatório por E-mail **\nFunção: Prepara e envia o relatório finalizado para os destinatários.\n1. Prepara E-mail: Este nó Set constrói as variáveis para a notificação. Ele busca dados de nós anteriores para montar:\n - Um assunto de e-mail claro e dinâmico.\n - Um corpo de e-mail em HTML profissional, com uma mensagem de saudação e um botão de download que aponta para o PDF gerado.\n2. Envia E-mail: Utiliza as variáveis do passo anterior para enviar o e-mail para uma lista de destinatários. É a etapa final que garante a entrega do relatório.",
+        "height": 400,
+        "width": 688,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        880,
+        -32
+      ],
+      "typeVersion": 1,
+      "id": "b2f4d3d4-081e-4385-92fe-accdaa4df41e",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "**Processamento e Estruturação dos Dados **\nFunção: Transforma os dados brutos em informações úteis e no template do relatório.\nProcessar e Estruturar: Este nó Code é o núcleo de toda a lógica. \nEle recebe os dados do Supabase e executa três tarefas cruciais:\n- Análise de Dados: Calcula métricas de resumo, como o total de dispositivos, o \ndispositivo com mais quedas e o com mais tempo offline.\n- Criação do Template: Gera um documento HTML completo e estilizado, que servirá \ncomo o \"molde\" para o relatório PDF, inserindo as métricas calculadas e uma tabela detalhada.\n- Nomenclatura Dinâmica: Cria um nome de arquivo padronizado e dinâmico para o\n relatório, usando o mês e o ano de referência (ex: Relatorio_Mensal_...-Outubro-2025.pdf).",
+        "height": 240,
+        "width": 928,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -272,
+        128
+      ],
+      "typeVersion": 1,
+      "id": "cb7da711-6cde-4fa8-a83d-14898699d3c7",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "device_outages",
+        "returnAll": true
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        256,
+        -144
+      ],
+      "id": "10f05968-b3e5-4213-bf43-c0b624605e73",
+      "name": "Get many rows",
+      "credentials": {
+        "supabaseApi": {
+          "id": "lzQLPzfafRfXEtM0",
+          "name": "Supabase account 2"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get many rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Processar e Estruturar": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request PDF": {
+      "main": [
+        [
+          {
+            "node": "Prepara E-mail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepara E-mail": {
+      "main": [
+        [
+          {
+            "node": "Envia E-mail Queda1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many rows": {
+      "main": [
+        [
+          {
+            "node": "Processar e Estruturar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "6158647a-c4de-4e72-907f-fd5f6e8ef0ed",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "185ba077e1c7b20c2b36283e5c616bb88d4b39bfffda32bf938f85eecc433603"
+  },
+  "id": "soUc5FZe5PKKoLOb",
+  "tags": []
+}
