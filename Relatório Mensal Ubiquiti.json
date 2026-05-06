@@ -1,0 +1,141 @@
+{
+  "name": "Relatório_Mensal_Ubiquiti",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "months"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "f5191904-1c67-4496-97eb-35cd90cbab47",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "device_outages",
+        "returnAll": true
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        224,
+        0
+      ],
+      "id": "10f05968-b3e5-4213-bf43-c0b624605e73",
+      "name": "Get many rows",
+      "credentials": {
+        "supabaseApi": {
+          "id": "lzQLPzfafRfXEtM0",
+          "name": "Supabase - Thais Acount"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "noreply@notifications.itease.com.br",
+        "toEmail": "=thais.goncalves@itease.com.br, marcus.reis@itease.com.br, vinicius.timoti@itease.com.br, everton.scarton@itease.com.br",
+        "subject": "={{ $json.email_subject }}",
+        "html": "={{ $json.html_relatorio }}",
+        "options": {
+          "appendAttribution": false,
+          "attachments": "data"
+        }
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        688,
+        0
+      ],
+      "id": "883a729a-6b16-4c05-9f97-0c4cb0ee7204",
+      "name": "Envia E-mail",
+      "webhookId": "36115061-64bb-4ea2-8c44-00292cc5b0de",
+      "credentials": {
+        "smtp": {
+          "id": "uL0IJTXM6hMteM7r",
+          "name": "Resend - Thais"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. Configurações de data e nomes dos meses\nconst agora = new Date();\nconst umMesAtras = new Date();\numMesAtras.setMonth(agora.getMonth() - 1);\n\nconst meses = [\n  \"Janeiro\", \"Fevereiro\", \"Março\", \"Abril\", \"Maio\", \"Junho\",\n  \"Julho\", \"Agosto\", \"Setembro\", \"Outubro\", \"Novembro\", \"Dezembro\"\n];\nconst nomeMesRelatorio = meses[umMesAtras.getMonth()];\n\n// Função para formatar minutos em Dias, Horas e Minutos\nconst formatarTempoDinamico = (minutosTotal) => {\n  if (minutosTotal === 0) return \"0 min\";\n  \n  const dias = Math.floor(minutosTotal / 1440);\n  const horas = Math.floor((minutosTotal % 1440) / 60);\n  const minutos = minutosTotal % 60;\n\n  let resultado = \"\";\n  if (dias > 0) resultado += `${dias}d `;\n  if (horas > 0) resultado += `${horas}h `;\n  if (minutos > 0 || resultado === \"\") resultado += `${minutos}min`;\n  \n  return resultado.trim();\n};\n\n// 2. Processamento de dados\nconst items = $input.all().map(i => i.json);\nlet stats = {};\n\nitems.forEach(item => {\n  const startTime = new Date(item.start_time);\n  const duracao = item.duration_minutes || 0;\n\n  // Filtro atualizado para considerar apenas quedas maiores que 5 minutos\n  if (startTime >= umMesAtras && duracao > 5) {\n    const name = item.device_name || \"Dispositivo Desconhecido\";\n\n    if (!stats[name]) {\n      stats[name] = { quedas: 0, tempoTotal: 0 };\n    }\n\n    stats[name].quedas += 1;\n    stats[name].tempoTotal += duracao;\n  }\n});\n\nconst ranking = Object.entries(stats).map(([name, data]) => ({\n  name,\n  ...data\n}));\n\n// Cálculos para os cards\nconst totalTempoOffGlobal = ranking.reduce((acc, curr) => acc + curr.tempoTotal, 0);\nconst recordistaQuedas = [...ranking].sort((a, b) => b.quedas - a.quedas)[0] || { name: \"N/A\", quedas: 0 };\nconst maisTempoOff = [...ranking].sort((a, b) => b.tempoTotal - a.tempoTotal)[0] || { name: \"N/A\", tempoTotal: 0 };\n\n// 3. Geração das linhas da tabela\nconst rowsHtml = ranking\n  .sort((a, b) => b.tempoTotal - a.tempoTotal)\n  .map((dev) => {\n    return `\n    <tr style=\"border-bottom: 1px solid #333;\">\n      <td style=\"padding: 12px 0; font-size: 14px; color: #ddd;\">${dev.name}</td>\n      <td style=\"padding: 12px 0; text-align: center; color: #ddd;\">${dev.quedas}</td>\n      <td style=\"padding: 12px 0; text-align: right; color: #e76e55; font-weight: bold;\">${formatarTempoDinamico(dev.tempoTotal)}</td>\n    </tr>\n  `}).join('');\n\n// 4. Template HTML Final\nconst htmlBody = `\n<div style=\"background-color: #1e1e1e; color: #ffffff; font-family: 'Segoe UI', Helvetica, Arial, sans-serif; max-width: 600px; margin: auto; border-radius: 8px; overflow: hidden; border: 1px solid #333;\">\n  \n  <div style=\"background-color: #0056b3; padding: 30px 20px; text-align: center;\">\n    <h2 style=\"margin: 0; font-size: 20px; font-weight: bold; letter-spacing: 0.5px; text-transform: uppercase;\">Relatório Mensal Ubiquiti</h2>\n    <div style=\"font-size: 14px; opacity: 0.9; margin-top: 5px;\">${nomeMesRelatorio} de ${umMesAtras.getFullYear()}</div>\n  </div>\n\n  <div style=\"padding: 25px 20px;\">\n    \n    <div style=\"display: table; width: 100%; border-spacing: 8px; border-collapse: separate; margin-left: -8px; margin-right: -8px; margin-bottom: 20px;\">\n      \n      <div style=\"display: table-cell; width: 33%; border: 1px solid #444; border-radius: 8px; padding: 15px; text-align: center; background: #262626; vertical-align: middle;\">\n        <div style=\"font-size: 10px; color: #999; text-transform: uppercase; margin-bottom: 8px; font-weight: bold;\">Tempo Total Off</div>\n        <div style=\"font-size: 16px; font-weight: bold; color: #eee;\">${formatarTempoDinamico(totalTempoOffGlobal)}</div>\n      </div>\n\n      <div style=\"display: table-cell; width: 33%; border: 1px solid #633333; border-radius: 8px; padding: 15px; text-align: center; background: #332424; vertical-align: middle;\">\n        <div style=\"font-size: 9px; color: #e76e55; text-transform: uppercase; margin-bottom: 5px; font-weight: bold;\">Mais Quedas</div>\n        <div style=\"font-size: 12px; font-weight: bold; color: #e76e55; line-height: 1.2; margin-bottom: 3px;\">${recordistaQuedas.name}</div>\n        <div style=\"font-size: 11px; color: #e76e55;\">(${recordistaQuedas.quedas}x)</div>\n      </div>\n\n      <div style=\"display: table-cell; width: 33%; border: 1px solid #633333; border-radius: 8px; padding: 15px; text-align: center; background: #332424; vertical-align: middle;\">\n        <div style=\"font-size: 9px; color: #e76e55; text-transform: uppercase; margin-bottom: 5px; font-weight: bold;\">Maior Tempo Off</div>\n        <div style=\"font-size: 12px; font-weight: bold; color: #e76e55; line-height: 1.2; margin-bottom: 3px;\">${maisTempoOff.name}</div>\n        <div style=\"font-size: 11px; color: #e76e55;\">(${formatarTempoDinamico(maisTempoOff.tempoTotal)})</div>\n      </div>\n\n    </div>\n\n    <h3 style=\"font-size: 16px; border-bottom: 2px solid #0056b3; padding-bottom: 10px; margin-bottom: 15px; font-weight: bold;\">Detalhamento por Dispositivo</h3>\n    <table style=\"width: 100%; border-collapse: collapse;\">\n      <thead>\n        <tr style=\"color: #777; font-size: 12px; text-transform: uppercase;\">\n          <th style=\"text-align: left; padding-bottom: 12px; font-weight: bold;\">Dispositivo</th>\n          <th style=\"text-align: center; padding-bottom: 12px; font-weight: bold;\">Quedas</th>\n          <th style=\"text-align: right; padding-bottom: 12px; font-weight: bold;\">Tempo Off</th>\n        </tr>\n      </thead>\n      <tbody>\n        ${rowsHtml}\n      </tbody>\n    </table>\n\n  </div>\n\n  <div style=\"background-color: #0056b3; padding: 20px; text-align: center;\">\n    <img src=\"https://i.imgur.com/t0K9ER0.png\" style=\"max-width: 150px; height: auto; display: block; margin: 0 auto;\" alt=\"Logo Rodapé\" />\n  </div>\n\n</div>\n`;\n\nreturn {\n  email_subject: `Relatório Mensal Ubiquiti - ${nomeMesRelatorio}`,\n  html_relatorio: htmlBody\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        464,
+        0
+      ],
+      "id": "52576448-dd89-47be-b45f-e7a598349464",
+      "name": "Code in JavaScript"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get many rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many rows": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Envia E-mail": {
+      "main": [
+        []
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Envia E-mail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Sao_Paulo",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false,
+    "errorWorkflow": "DULPOCLZ4WnWM9Sd"
+  },
+  "versionId": "88befc60-76e3-43a3-9bc9-6a6dec4e92f1",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "185ba077e1c7b20c2b36283e5c616bb88d4b39bfffda32bf938f85eecc433603"
+  },
+  "id": "soUc5FZe5PKKoLOb",
+  "tags": []
+}
