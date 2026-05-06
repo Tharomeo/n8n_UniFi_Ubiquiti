@@ -14,7 +14,7 @@
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
-        -336,
+        -288,
         0
       ],
       "id": "7f04e95c-7403-4667-82f2-8927507e6282",
@@ -41,7 +41,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        -128,
+        -80,
         0
       ],
       "id": "0a55dd07-15fe-40e9-8899-c26a9a855ee1",
@@ -68,7 +68,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        80,
+        128,
         0
       ],
       "id": "96b9b90f-b5fc-41ea-bee6-2814102136f3",
@@ -110,7 +110,7 @@
     },
     {
       "parameters": {
-        "fromEmail": "testeitease488@gmail.com",
+        "fromEmail": "noreply@notifications.itease.com.br",
         "toEmail": "=thais.goncalves@itease.com.br",
         "subject": "={{ $json.tituloChamado }}",
         "html": "={{ $json.descricaoChamado }}",
@@ -130,7 +130,7 @@
       "credentials": {
         "smtp": {
           "id": "uL0IJTXM6hMteM7r",
-          "name": "SMTP account 2"
+          "name": "Resend - Thais"
         }
       }
     },
@@ -151,16 +151,17 @@
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
       "position": [
-        784,
-        352
+        832,
+        656
       ],
       "id": "5731fca3-d12a-4042-93bf-ed999dc939a2",
       "name": "Verifica Restauracao",
       "alwaysOutputData": false,
+      "retryOnFail": true,
       "credentials": {
         "supabaseApi": {
           "id": "lzQLPzfafRfXEtM0",
-          "name": "Supabase account 2"
+          "name": "Supabase - Thais Acount"
         }
       }
     },
@@ -191,8 +192,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        992,
-        352
+        1040,
+        656
       ],
       "id": "ae19b50c-6538-4485-90bb-27ea77a71b45",
       "name": "Decide Restauracao"
@@ -210,7 +211,7 @@
             {
               "id": "ccccb415-b2da-4c13-ad11-717a96ca9ae8",
               "name": "descricaoChamado",
-              "value": "=<div style=\"font-family: Arial, sans-serif; padding: 25px; border: 1px solid #e0e0e0; border-radius: 8px; max-width: 600px; margin: auto; background-color: #f0fff0;\">   <h2 style=\"color: #27ae60; border-bottom: 2px solid #27ae60; padding-bottom: 10px;\">👍 Notificação de Restauração</h2>   <p>Boas notícias! O dispositivo <strong>{{ $json.device_name }}</strong> está online novamente.</p>   <div style=\"background-color: #ffffff; border: 1px solid #dddddd; padding: 15px; border-radius: 5px; margin-top: 15px;\">     <p style=\"margin: 5px 0;\"><strong>ID do Dispositivo:</strong> {{ $json.device_id }}</p>     <p style=\"margin: 5px 0;\"><strong>Horário da Detecção:</strong> {{ new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) }}</p>   </div> </div>",
+              "value": "=<div style=\"font-family: Arial, sans-serif; padding: 25px; border: 1px solid #e0e0e0; border-radius: 8px; max-width: 600px; margin: auto; background-color: #f0fff0;\">\n   \n   <h2 style=\"color: #27ae60; border-bottom: 2px solid #27ae60; padding-bottom: 10px;\">\n     👍 Notificação de Restauração\n     <img src=\"https://i.imgur.com/t0K9ER0.png\" style=\"float: right; height: 40px; margin-top: -5px;\" alt=\"Logo\">\n   </h2>\n   \n   <p>Boas notícias! O dispositivo <strong>{{ $json.device_name }}</strong> está online novamente.</p>\n   \n   <div style=\"background-color: #ffffff; border: 1px solid #dddddd; padding: 15px; border-radius: 5px; margin-top: 15px;\">\n      <p style=\"margin: 5px 0;\"><strong>ID do Dispositivo:</strong> {{ $json.device_id }}</p>\n      <p style=\"margin: 5px 0;\"><strong>Horário da Detecção:</strong> {{ new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) }}</p>\n   </div>\n</div>",
               "type": "string"
             }
           ]
@@ -220,8 +221,8 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        1232,
-        336
+        1280,
+        640
       ],
       "id": "7dbd4def-186f-4aaf-8827-4f1e859b5c0e",
       "name": "Cria Variaveis Restauracao"
@@ -243,15 +244,15 @@
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
       "position": [
-        2000,
-        336
+        2048,
+        640
       ],
       "id": "c36020a2-59a6-462c-9139-f9e1df65bb12",
       "name": "Remove Registro Restaurado",
       "credentials": {
         "supabaseApi": {
           "id": "lzQLPzfafRfXEtM0",
-          "name": "Supabase account 2"
+          "name": "Supabase - Thais Acount"
         }
       }
     },
@@ -284,15 +285,15 @@
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
       "position": [
-        1824,
-        336
+        1872,
+        640
       ],
       "id": "91b9adcf-25e7-4219-89f1-98cde28d2bf5",
       "name": "Atualiza Registro Restaurado",
       "credentials": {
         "supabaseApi": {
           "id": "lzQLPzfafRfXEtM0",
-          "name": "Supabase account 2"
+          "name": "Supabase - Thais Acount"
         }
       }
     },
@@ -303,8 +304,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1632,
-        336
+        1680,
+        640
       ],
       "id": "eff5ec5f-ea2c-4a97-bf5c-5275b582da16",
       "name": "Calcula Duracao"
@@ -322,7 +323,7 @@
             {
               "id": "6e7f3ac9-a3dd-44ed-99f7-9b48942f0dc4",
               "name": "descricaoChamado",
-              "value": "=<div style=\"font-family: Arial, sans-serif; padding: 25px; border: 1px solid #e0e0e0; border-radius: 8px; max-width: 600px; margin: auto; background-color: #fff0f0;\">\n  <h2 style=\"color: #e74c3c; border-bottom: 2px solid #e74c3c; padding-bottom: 10px;\">🚨 Alerta de Queda</h2>\n  <p>O dispositivo <strong> {{ $('FiltraOffline').item.json.reportedState.name }} </strong> foi detectado como OFFLINE.</p>\n  <div style=\"background-color: #ffffff; border: 1px solid #dddddd; padding: 15px; border-radius: 5px; margin-top: 15px;\">\n    <p style=\"margin: 5px 0;\"><strong>ID do Dispositivo:</strong> {{ $('FiltraOffline').item.json.id }} </p>\n    <p style=\"margin: 5px 0;\"><strong>MAC Address:</strong> </p>\n    <p style=\"margin: 5px 0;\"><strong>Horário da Detecção:</strong> {{ new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) }}</p>\n  </div>\n  <p style=\"margin-top: 20px; font-size: 0.9em; color: #777;\">Uma notificação de restauração será enviada quando o dispositivo voltar a ficar online.</p>\n</div>\n",
+              "value": "=<div style=\"font-family: Arial, sans-serif; padding: 25px; border: 1px solid #e0e0e0; border-radius: 8px; max-width: 600px; margin: auto; background-color: #fff0f0;\">\n  \n  <h2 style=\"color: #e74c3c; border-bottom: 2px solid #e74c3c; padding-bottom: 10px;\">\n    🚨 Alerta de Queda\n    <img src=\"https://i.imgur.com/t0K9ER0.png\" style=\"float: right; height: 40px; margin-top: -5px;\" alt=\"Logo\">\n  </h2>\n  \n  <p>O dispositivo <strong> {{ $('FiltraOffline').item.json.reportedState.name }} </strong> foi detectado como OFFLINE.</p>\n  \n  <div style=\"background-color: #ffffff; border: 1px solid #dddddd; padding: 15px; border-radius: 5px; margin-top: 15px;\">\n    <p style=\"margin: 5px 0;\"><strong>ID do Dispositivo:</strong> {{ $('FiltraOffline').item.json.id }} </p>\n    <p style=\"margin: 5px 0;\"><strong>MAC Address:</strong> </p>\n    <p style=\"margin: 5px 0;\"><strong>Horário da Detecção:</strong> {{ new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) }}</p>\n  </div>\n  \n  <p style=\"margin-top: 20px; font-size: 0.9em; color: #777;\">Uma notificação de restauração será enviada quando o dispositivo voltar a ficar online.</p>\n</div>",
               "type": "string"
             }
           ]
@@ -341,7 +342,7 @@
     },
     {
       "parameters": {
-        "fromEmail": "testeitease488@gmail.com",
+        "fromEmail": "noreply@notifications.itease.com.br",
         "toEmail": "=thais.goncalves@itease.com.br",
         "subject": "={{ $json.tituloChamado }}",
         "html": "={{ $json.descricaoChamado }}",
@@ -352,8 +353,8 @@
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2.1,
       "position": [
-        1424,
-        336
+        1472,
+        640
       ],
       "id": "6ea58f47-3cde-4bdf-baf9-6b1cc84fed55",
       "name": "Envia E-mail Restauracao",
@@ -361,7 +362,7 @@
       "credentials": {
         "smtp": {
           "id": "uL0IJTXM6hMteM7r",
-          "name": "SMTP account 2"
+          "name": "Resend - Thais"
         }
       }
     },
@@ -392,7 +393,7 @@
       "credentials": {
         "supabaseApi": {
           "id": "lzQLPzfafRfXEtM0",
-          "name": "Supabase account 2"
+          "name": "Supabase - Thais Acount"
         }
       }
     },
@@ -422,7 +423,7 @@
       "credentials": {
         "supabaseApi": {
           "id": "lzQLPzfafRfXEtM0",
-          "name": "Supabase account 2"
+          "name": "Supabase - Thais Acount"
         }
       }
     },
@@ -491,9 +492,57 @@
       "credentials": {
         "supabaseApi": {
           "id": "lzQLPzfafRfXEtM0",
-          "name": "Supabase account 2"
+          "name": "Supabase - Thais Acount"
         }
       }
+    },
+    {
+      "parameters": {
+        "content": "**1. Coleta e Iteração**\n* **GetUbiquitiDevices:** Consulta a API da controladora UniFi para pegar o status atual de todos os dispositivos.\n* **Code/Loop:** Normaliza os dados e inicia um loop para processar dispositivo por dispositivo individualmente.",
+        "height": 320,
+        "width": 896,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -368,
+        -144
+      ],
+      "typeVersion": 1,
+      "id": "8aa63a62-c888-4a7b-bb80-191748ec13ba",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "**2. Fluxo de Detecção de Queda (Offline)**\nSe o dispositivo estiver `disconnected`:\n1.  **Verificação:** Consulta o Supabase para ver se ele *já estava* offline antes.\n2.  **Anti-Flood:** Se já estava offline, ignora (para não mandar spam de e-mail).\n3.  **Ação (Nova Queda):**\n    * Gera variáveis de alerta.\n    * Envia e-mail informando \"Dispositivo Offline\".\n    * **Registro:** Cria uma entrada na tabela de dispositivos offline (status aberto) e no histórico de quedas.",
+        "height": 464,
+        "width": 1536,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        560,
+        -176
+      ],
+      "typeVersion": 1,
+      "id": "91dde034-a115-466e-b2a2-89e3876bdbd8",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "**3. Fluxo de Restauração (Online)**\nSe o dispositivo estiver `connected`:\n1.  **Verificação:** Consulta o Supabase para ver se ele consta na lista de \"Dispositivos Offline\".\n2.  **Decisão:** Se ele estava na lista offline e agora está online, significa que **voltou**.\n3.  **Ação (Recuperação):**\n    * **Cálculo:** Calcula quanto tempo ficou fora (`Calcula Duracao`).\n    * Envia e-mail informando \"Dispositivo Online\" com a duração da queda.\n    * **Limpeza:** Atualiza o histórico com o horário de volta e remove o dispositivo da tabela de \"Offline Atuais\".",
+        "height": 464,
+        "width": 1472,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        784,
+        384
+      ],
+      "typeVersion": 1,
+      "id": "552c79bf-f857-49a6-aa8e-062e66dc40e6",
+      "name": "Sticky Note2"
     }
   ],
   "pinData": {},
@@ -607,6 +656,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -695,6 +751,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -712,9 +775,14 @@
   },
   "active": true,
   "settings": {
-    "executionOrder": "v1"
+    "executionOrder": "v1",
+    "timezone": "America/Sao_Paulo",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false,
+    "errorWorkflow": "iNrBLK90jDkNpg5z",
+    "timeSavedMode": "fixed"
   },
-  "versionId": "266df68f-1b03-4f68-ae67-efcf3a5c113a",
+  "versionId": "b5a1bad3-650a-48d5-9c9d-c389d7e45c64",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "185ba077e1c7b20c2b36283e5c616bb88d4b39bfffda32bf938f85eecc433603"
