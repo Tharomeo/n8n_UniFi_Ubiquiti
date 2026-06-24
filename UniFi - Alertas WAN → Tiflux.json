@@ -1,0 +1,993 @@
+{
+  "name": "UniFi - Alertas WAN → Tiflux",
+  "nodes": [
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-001",
+              "leftValue": "={{ $json.from.emailAddress.address }}",
+              "rightValue": "ubiquiti@itease.com.br",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "f025bebe-c08a-4f6f-acfc-4c7bdb3dd21f",
+      "name": "É alerta UniFi?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -208,
+        832
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const results = [];\n\nfor (const item of $input.all()) {\n  const subject     = item.json.subject                 || '';\n  const htmlBody    = item.json.body?.content           || '';\n  const bodyPreview = item.json.bodyPreview             || '';\n  const receivedAt  = item.json.receivedDateTime        || '';\n  const emailId     = item.json.id                      || '';\n\n  const plainBody = htmlBody\n    .replace(/<[^>]+>/g, ' ')\n    .replace(/&nbsp;/gi, ' ')\n    .replace(/&amp;/gi,  '&')\n    .replace(/&lt;/gi,   '<')\n    .replace(/&gt;/gi,   '>')\n    .replace(/\\s+/g,     ' ')\n    .trim();\n\n  const bodyText = plainBody || bodyPreview;\n  const subjectClean = subject.replace(/^(FW|RE|ENC|FWD):\\s*/i, '').trim();\n\n  const deviceMatch = subjectClean.match(/^(.+?):\\s*WAN/i);\n  const dispositivo = deviceMatch ? deviceMatch[1].trim() : 'Desconhecido';\n\n  const siteMatch = dispositivo.match(/(?:UCG|UDM)[\\s\\w]*\\s*-\\s*(.+)/i);\n  const siteName  = siteMatch ? siteMatch[1].trim() : dispositivo;\n\n  // Detecta tipo de alerta\n  const isFailover = /Failover\\s+Active/i.test(subjectClean);\n  const isRestored = /\\bRestored\\b/i.test(subjectClean);\n\n  let wan, isp, porta, status;\n  let wan_reserva = null, isp_reserva = null;\n\n  if (isFailover) {\n    // Ex: \"WAN1 (Vivo) on port 5 is down and WAN2 (Claro NET) is now active.\"\n    const fMatch = bodyText.match(\n      /WAN(\\d+)\\s*\\(([^)]+)\\)\\s+on\\s+port\\s+(\\d+)\\s+is\\s+down\\s+and\\s+WAN(\\d+)\\s*\\(([^)]+)\\)/i\n    );\n    if (fMatch) {\n      wan         = `WAN${fMatch[1]}`;\n      isp         = fMatch[2].trim();\n      porta       = fMatch[3];\n      wan_reserva = `WAN${fMatch[4]}`;\n      isp_reserva = fMatch[5].trim();\n    } else {\n      const wanM = subjectClean.match(/(WAN\\d+)/i);\n      wan = wanM ? wanM[1].toUpperCase() : 'Desconhecido';\n      isp = 'Desconhecido';\n      porta = 'Desconhecido';\n    }\n    status = 'FAILOVER';\n\n  } else {\n    const wanMatch = subjectClean.match(/(WAN\\d+)/i);\n    wan = wanMatch ? wanMatch[1].toUpperCase() : 'Desconhecido';\n\n    const ispMatch = bodyText.match(/WAN\\d+\\s*\\(([^)]+)\\)/i);\n    isp = ispMatch ? ispMatch[1].trim() : 'Desconhecido';\n\n    const portMatch = bodyText.match(/on\\s+port\\s+(\\d+)/i);\n    porta = portMatch ? portMatch[1] : 'Desconhecido';\n\n    status = isRestored ? 'RESTORED' : 'DOWN';\n  }\n\n  const timeMatch = bodyText.match(\n    /((?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\\s+\\d{1,2},\\s*\\d{4}\\s+at\\s+[\\d:]+\\s*[AP]M)/i\n  );\n\n  let horario = receivedAt;\n  if (timeMatch) {\n    const rawStr = timeMatch[1].trim().replace(/\\s+at\\s+/i, ' ');\n    const raw = new Date(rawStr);\n    if (!isNaN(raw)) {\n      horario = raw.toLocaleString('pt-BR', {\n        timeZone: 'America/Sao_Paulo',\n        day: '2-digit', month: '2-digit', year: '2-digit',\n        hour: '2-digit', minute: '2-digit', second: '2-digit',\n        hour12: false\n      });\n    } else {\n      horario = timeMatch[1].trim();\n    }\n  }\n\n  const emoji = status === 'DOWN' ? '🔴' : status === 'FAILOVER' ? '🟡' : '🟢';\n\n  const tituloTicket = isFailover\n    ? `Alerta UniFi ${dispositivo} - ${wan} Down (Failover ${wan_reserva} Ativo)`\n    : `Alerta UniFi ${dispositivo} - ${wan} Down`;\n\n  const resumoReserva = wan_reserva ? ` → Failover: ${isp_reserva} (${wan_reserva})` : '';\n  const resumo = `${emoji} [${status}] ${dispositivo} — ${isp} (${wan})${resumoReserva} às ${horario}`;\n\n  results.push({\n    json: {\n      dispositivo,\n      siteName,\n      wan,\n      isp,\n      porta,\n      wan_reserva,\n      isp_reserva,\n      status,\n      horario,\n      emoji,\n      emailId,\n      tituloTicket,\n      resumo,\n      assunto_original: subject\n    }\n  });\n}\n\nreturn results;"
+      },
+      "id": "2d0ff1d7-3622-49b8-8eb5-a0c18369fef2",
+      "name": "Parsear Alerta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        16,
+        816
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://graph.microsoft.com/v1.0/users/automacao@itease.com.br/messages?$filter=isRead eq false&$orderby=receivedDateTime desc&$top=10",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "microsoftOutlookOAuth2Api",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -576,
+        832
+      ],
+      "id": "c66092a5-a48f-44e6-b897-18d06259382a",
+      "name": "HTTP Request",
+      "credentials": {
+        "microsoftOutlookOAuth2Api": {
+          "id": "5aicS3w8OUbBVE5Z",
+          "name": "Outlook"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -752,
+        832
+      ],
+      "id": "c78bf435-d7e9-4a63-84c6-9c64e936ff35",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "value",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        -384,
+        832
+      ],
+      "id": "6bacbf32-1c74-41ca-a6d3-acbbd5a2205b",
+      "name": "Split Out"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cond-002",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "RESTORED",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c393d013-a07d-4158-b5cf-20b7bffb7ef7",
+      "name": "DOWN ou RESTORED?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        224,
+        816
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://api.tiflux.com/api/v2/clients",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "limit",
+              "value": "200"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "48dedec0-485f-4dc3-9980-092a8bafd54e",
+      "name": "Pegar Clientes Tiflux",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        720,
+        736
+      ],
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "JVeFJM1a0e3yFaeZ",
+          "name": "Tiflux"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// FILTRA EMPRESA NO TIFLUX\n// Mapeia o nome do site UniFi → nome do cliente no Tiflux\n// ============================================================\nconst dadosAlerta = $('Loop Over Items').first().json;\nconst nomeSite = dadosAlerta.siteName;\n\n// ⚠️ PREENCHA COM TODOS OS SEUS CLIENTES:\nconst correcao_nomes = {\n  \"Antares\": \"Antares Ambiental\",\n  \"Arquitetura Kids\": \"Arquitetura Kids\",\n  \"CDias (Galpão 1)\": \"CDias Engenharia\",\n  \"CDias (Galpão 2)\": \"CDias Engenharia\",\n  \"CDias (Galpão 3)\": \"CDias Engenharia\",\n  \"Centerbor\": \"Centerbor\",\n  \"Centerplast\": \"Centerplast\",\n  \"CFS\": \"CFS do Brasil\",\n  \"COPI Gestão\": \"Copi Gestao Empresarial Ltda\",\n  \"Grupo AL2\": \"Grupo AL2\",\n  \"HOMOLOGACAO\": \"iTease Soluções em TI\",\n  \"iTease\": \"iTease Soluções em TI\",\n  \"iTease DC\": \"iTease Soluções em TI\",\n  \"Lógica Empreendiment\": \"Lógica Empreendimentos\",\n  \"M1 Tecnologia\": \"M1 Tecnologia\",\n  \"Megaplasma\": \"Megaplasma\",\n  \"Pecht Contabil\": \"Pecht Contábil\",\n  \"Reinaflex (Filial)\": \"Reinaflex\",\n  \"Reinaflex (Matriz)\": \"Reinaflex\",\n  \"Samba Workspaces\": \"Samba Workspaces\",\n  \"São Paulo 2\": \"LONGITUDE\",\n  \"Urban Square\": \"Urban Square\",\n  \"Vidraçaria São Luiz\": \"Vidraçaria São Luis\",\n  \"Ville de Provence\": \"Ville de Provence\",\n  \"Voilap\": \"VOILAP BRASIL\",\n  \"Woodward\": \"WoodWard\",\n  \"Amizade (Sumaré)\": \"LONGITUDE\",\n  \"UDM Longitude Matriz\": \"LONGITUDE\",\n  \"Trend\": \"LONGITUDE\",\n  \"Itaim - Vibe - Zen\": \"LONGITUDE\",\n  \"Logica Contabilidade\": \"Logica Contabilidade\",\n  \"Longitude Matriz\": \"LONGITUDE\",\n  \"Orion - Piracicaba\": \"LONGITUDE\",\n  \"PDV Central (São Paulo)\": \"LONGITUDE\",\n  \"Solis\": \"LONGITUDE\",\n  \"Sorocaba II\": \"LONGITUDE\",\n  \"Villa Home Resort\": \"LONGITUDE\",\n  \"Nakayoshi\": \"Loja Nakayoshi\",\n  \"1° Andar (Indaiatuba)\": \"LONGITUDE\",\n  \"Atiara/Atiluz\": \"Atiara\",\n  \"VisoFlex\": \"Visoflex\",\n  \"ELEV\": \"LONGITUDE\",\n};\n\nfunction limpar(texto) {\n  if (!texto) return '';\n  return texto.toString().toLowerCase()\n    .replace(/&/g, 'e')\n    .normalize('NFD').replace(/[\\u0300-\\u036f]/g, '')\n    .replace(/[\\s\\-\\._]/g, '');\n}\n\nconst nomeBusca       = correcao_nomes[nomeSite] || nomeSite;\nconst nomeAlvoLimpo   = limpar(nomeBusca);\n\n// Tentativa 1: busca exata\nlet clienteEncontrado = items.find(c => limpar(c.json.name) === nomeAlvoLimpo);\n\n// Tentativa 2: busca por aproximação\nif (!clienteEncontrado) {\n  clienteEncontrado = items.find(c => {\n    const n = limpar(c.json.name);\n    return n.includes(nomeAlvoLimpo) || nomeAlvoLimpo.includes(n);\n  });\n}\n\nif (clienteEncontrado) {\n  return [{ json: { ...clienteEncontrado.json, debug_nome_buscado: nomeBusca } }];\n} else {\n  return [{ json: {\n    erro: 'CLIENTE_NAO_ENCONTRADO',\n    nome_tentado: nomeBusca,\n    nome_site_unifi: nomeSite,\n    amostra: items.slice(0,3).map(i => i.json.name)\n  }}];\n}"
+      },
+      "id": "c2115692-2cdc-4efa-9ee2-85043a3ae85b",
+      "name": "Filtra Empresa",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        944,
+        736
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.tiflux.com/api/v2/clients/{{ $json.id }}/requestors",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "limit",
+              "value": "200"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "202a3023-81b8-4b64-9992-62e73d2d89e8",
+      "name": "Solicitantes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1168,
+        736
+      ],
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "JVeFJM1a0e3yFaeZ",
+          "name": "Tiflux"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// ACHA SOLICITANTE NO TIFLUX\n// Usa o mesmo padrão do Datto: rmm.[apelido]@itease.com.br\n// ============================================================\nconst dadosAlerta = $('Loop Over Items').first().json;\nconst nomeSite    = dadosAlerta.siteName;\n\n// ⚠️ PREENCHA COM OS APELIDOS DE E-MAIL DE CADA SITE:\nconst excecoes_email = {\n  \"Antares\":                \"antares\",\n  \"Arquitetura Kids\":       \"arquiteturakids\",\n  \"CDias (Galpão 1)\":       \"cdias\",\n  \"CDias (Galpão 2)\":       \"cdias\",\n  \"CDias (Galpão 3)\":       \"cdias\",\n  \"Centerbor\":              \"centerbor\",\n  \"Centerplast\":            \"centerplast\",\n  \"CFS\":                    \"cfsdobrasil\",\n  \"COPI Gestão\":            \"copi\",\n  \"Grupo AL2\":              \"grupoal2\",\n  \"HOMOLOGACAO\":            \"itease\",\n  \"iTease\":                 \"itease\",\n  \"iTease DC\":              \"itease\",\n  \"Lógica Empreendiment\":   \"logicaempreendimentos\",\n  \"M1 Tecnologia\":          \"m1\",\n  \"Megaplasma\":             \"megaplasma\",\n  \"Pecht Contabil\":         \"pechtcontabil\",\n  \"Reinaflex (Filial)\":     \"reinaflex\",\n  \"Reinaflex (Matriz)\":     \"reinaflex\",\n  \"Samba Workspaces\":       \"sambaworkspaces\",\n  \"São Paulo 2\":            \"longitude\",\n  \"Urban Square\":           \"urbansquare\",\n  \"Vidraçaria São Luiz\":    \"vidracaria\",\n  \"Ville de Provence\":      \"villedeprovence\",\n  \"Voilap\":                 \"voilap\",\n  \"Woodward\":               \"woodward\",\n  \"Amizade (Sumaré)\":       \"longitude\",\n  \"Trend\":                  \"longitude\",\n  \"Itaim - Vibe - Zen\":     \"longitude\",\n  \"Logica Contabilidade\":   \"logica\",\n  \"Longitude Matriz\":       \"longitude\",\n  \"Orion - Piracicaba\":     \"longitude\",\n  \"PDV Central (São Paulo)\":\"longitude\",\n  \"Solis\":                  \"longitude\",\n  \"Sorocaba II\":            \"longitude\",\n  \"Villa Home Resort\":      \"longitude\",\n  \"Nakayoshi\":              \"nakayoshi\",\n  \"1° Andar (Indaiatuba)\":  \"longitude\",\n  \"Atiara/Atiluz\":          \"atiara\",\n  \"VisoFlex\":               \"visoflex\",\n  \"ELEV\":                   \"longitude\",\n  \"Lógica Contabilidade\":   \"logica\",\n};\n\nfunction limpar(texto) {\n  if (!texto) return '';\n  return texto.toString().toLowerCase()\n    .replace(/&/g, 'e')\n    .normalize('NFD').replace(/[\\u0300-\\u036f]/g, '')\n    .replace(/[\\s\\-\\._]/g, '');\n}\n\nconst apelido  = excecoes_email[nomeSite] || limpar(nomeSite);\nconst emailAlvo = `rmm.${apelido}@itease.com.br`;\n\nconst usuario = items.find(u =>\n  u.json.email && u.json.email.toLowerCase() === emailAlvo.toLowerCase()\n);\n\nif (usuario) {\n  return [{ json: { ...usuario.json, debug_email_gerado: emailAlvo } }];\n} else {\n  return [{ json: {\n    erro: 'SOLICITANTE_NAO_ENCONTRADO',\n    email_tentado: emailAlvo,\n    nome_site: nomeSite\n  }}];\n}"
+      },
+      "id": "fd62d9eb-b03d-47bc-aa9d-736efb4d557d",
+      "name": "Acha Solicitante",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1392,
+        736
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// UNE INFORMAÇÕES PARA ABERTURA DO TICKET\n// ============================================================\nconst dadosAlerta = $('Loop Over Items').first().json;\nconst dadosEmpresa    = $('Filtra Empresa').first().json;\nconst dadosSolicitante = items[0].json;\n\nif (dadosEmpresa.erro) {\n  throw new Error(`Cliente não encontrado no Tiflux: ${dadosEmpresa.nome_tentado}`);\n}\nif (dadosSolicitante.erro) {\n  throw new Error(`Solicitante não encontrado: ${dadosSolicitante.email_tentado}`);\n}\n\nreturn [{\n  json: {\n    ...dadosAlerta,\n    client_id:          Number(dadosEmpresa.id),\n    site_name_tiflux:   dadosEmpresa.name,\n    requestor_id:       Number(dadosSolicitante.id),\n    tiflux_priority_id: 217041,  // Critical — WAN Down é sempre crítico\n    id_catalogo_wan:    0        // ⚠️ PREENCHER com o ID de catálogo de \"Internet/WAN\" no Tiflux\n  }\n}];"
+      },
+      "id": "248f7060-dbf9-4c83-9e41-8923bcb01952",
+      "name": "Une Infos DOWN",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1600,
+        736
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.tiflux.com/api/v2/tickets",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "title",
+              "value": "=Alerta UniFi {{ $json.dispositivo }} - {{ $json.wan }} Down"
+            },
+            {
+              "name": "description",
+              "value": "=🔴 QUEDA DE INTERNET DETECTADA\n{{ $json.resumo }}\n\nDispositivo: {{ $json.dispositivo }}\nInterface: {{ $json.wan }}\nPorta: {{ $json.porta }}\nOperadora: {{ $json.isp }}\nHorário do Evento: {{ $json.horario }}\n\n"
+            },
+            {
+              "name": "client_id",
+              "value": "={{ $json.client_id }}"
+            },
+            {
+              "name": "desk_id",
+              "value": "68131"
+            },
+            {
+              "name": "priority_id",
+              "value": "=217041"
+            },
+            {
+              "name": "requestor_id",
+              "value": "={{ $json.requestor_id }}"
+            },
+            {
+              "name": "stage_id",
+              "value": "411395"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a6326ffb-d296-4d6f-8df4-c16303a07b8d",
+      "name": "Criar Ticket - DOWN",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1808,
+        736
+      ],
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "JVeFJM1a0e3yFaeZ",
+          "name": "Tiflux"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://graph.microsoft.com/v1.0/users/automacao@itease.com.br/messages/{{ $('Parsear Alerta').first().json.emailId }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "microsoftOutlookOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{ \"isRead\": true }",
+        "options": {}
+      },
+      "id": "912cabd7-5ea0-4984-a3f5-4cfd40164680",
+      "name": "Marcar Lido (DOWN)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2224,
+        736
+      ],
+      "credentials": {
+        "microsoftOutlookOAuth2Api": {
+          "id": "5aicS3w8OUbBVE5Z",
+          "name": "Outlook"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const dadosAlerta = $('Loop Over Items1').first().json;\nconst registros = $input.all().map(i => i.json);\n\nif (registros.length === 0) return [];\n\n// Prioridade de match para o ticket a fechar:\n// 1. Mesmo WAN + DOWN/FAILOVER, recente (≤48h)\n// 2. FAILOVER onde WAN_Reserva = WAN restaurada, recente\n// 3. Qualquer FAILOVER recente do dispositivo\n\nfunction horasAtras(horario) {\n  const [datePart, timePart] = horario.split(', ');\n  const [d, m, y] = datePart.split('/');\n  const dt = new Date(`20${y}-${m}-${d}T${timePart}-03:00`);\n  return (Date.now() - dt.getTime()) / (1000 * 60 * 60);\n}\n\nconst recentes = registros.filter(r => horasAtras(r.Horario) <= 48);\n\nif (recentes.length === 0) {\n  console.log('SKIP: nenhum registro recente (≤48h) encontrado.');\n  return [];\n}\n\n// Prioridade 1: mesmo WAN, DOWN ou FAILOVER\nlet pool = recentes.filter(r =>\n  r.WAN === dadosAlerta.wan && (r.Status === 'DOWN' || r.Status === 'FAILOVER')\n);\n\n// Prioridade 2: FAILOVER onde WAN_Reserva = WAN restaurada\nif (pool.length === 0) {\n  pool = recentes.filter(r =>\n    r.Status === 'FAILOVER' && r.WAN_Reserva === dadosAlerta.wan\n  );\n}\n\n// Prioridade 3: qualquer FAILOVER recente\nif (pool.length === 0) {\n  pool = recentes.filter(r => r.Status === 'FAILOVER');\n}\n\n// Fallback: qualquer recente\nif (pool.length === 0) pool = recentes;\n\n// Pega o mais recente pelo maior id\nconst registro = pool.reduce((a, b) => (a.id > b.id ? a : b));\nconst ticketNumber = registro['field_5074'] || registro.ticket_number || registro.Ticket;\n\nif (!ticketNumber) return [];\n\nconsole.log(`Ticket escolhido: ${ticketNumber} | WAN: ${registro.WAN} | Status: ${registro.Status} | ${registro.Horario}`);\n\nconst dataAgora = new Date().toLocaleDateString('pt-BR', {\n  timeZone: 'America/Sao_Paulo',\n  year: 'numeric', month: '2-digit', day: '2-digit'\n}).split('/').reverse().join('-');\n\nreturn [{\n  json: {\n    ...dadosAlerta,\n    ticket_number: ticketNumber,\n    apontamento_date: dataAgora,\n    descricao_apontamento: `Internet restaurada automaticamente via UniFi. ${dadosAlerta.dispositivo} - ${dadosAlerta.wan}`,\n  }\n}];"
+      },
+      "id": "82670999-2f89-4699-acee-4110e5735d17",
+      "name": "Prepara Fechamento",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1136,
+        1056
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://api.tiflux.com/api/v2/tickets/{{ $json.ticket_number }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "services_catalogs_item_id",
+              "value": "1387978"
+            },
+            {
+              "name": "stage_id",
+              "value": "=411395"
+            },
+            {
+              "name": "responsible_id",
+              "value": "1015314"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a403a9cf-72dc-476f-9173-88221c319266",
+      "name": "Classificar Ticket",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1360,
+        1056
+      ],
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "JVeFJM1a0e3yFaeZ",
+          "name": "Tiflux"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.tiflux.com/api/v2/tickets/{{ $('Prepara Fechamento').first().json.ticket_number }}/appointments",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "date",
+              "value": "={{ $('Prepara Fechamento').item.json.apontamento_date }}"
+            },
+            {
+              "name": "init_time",
+              "value": "={{ $now.setZone('America/Sao_Paulo').minus({ minutes: 15 }).toFormat('HH:mm') }}"
+            },
+            {
+              "name": "end_time",
+              "value": "={{ $now.setZone('America/Sao_Paulo').toFormat('HH:mm') }}"
+            },
+            {
+              "name": "description",
+              "value": "=Internet restaurada automaticamente via UniFi. {{ $('Parsear Alerta').first().json.resumo }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "5c6d1621-21b0-474e-a432-b896a730fb7b",
+      "name": "Apontamento",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1584,
+        1056
+      ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "JVeFJM1a0e3yFaeZ",
+          "name": "Tiflux"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://api.tiflux.com/api/v2/tickets/{{ $('Prepara Fechamento').item.json.ticket_number }}/close",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "options": {}
+      },
+      "id": "79e2e73d-68b0-4f06-9803-e65b7ada33a6",
+      "name": "Fechar Ticket",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1792,
+        1056
+      ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "JVeFJM1a0e3yFaeZ",
+          "name": "Tiflux"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://graph.microsoft.com/v1.0/users/automacao@itease.com.br/messages/{{ $('Parsear Alerta').first().json.emailId }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "microsoftOutlookOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{ \"isRead\": true }",
+        "options": {}
+      },
+      "id": "820d5687-d1cb-46dd-be78-0db157475d85",
+      "name": "Marcar Lido (RESTORED)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2208,
+        1056
+      ],
+      "credentials": {
+        "microsoftOutlookOAuth2Api": {
+          "id": "5aicS3w8OUbBVE5Z",
+          "name": "Outlook"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        496,
+        640
+      ],
+      "id": "8c9cfa4a-d297-47d2-b314-622e9d1a5e84",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        496,
+        960
+      ],
+      "id": "d6ae0bb0-c947-4121-852a-1dd0db9a0f99",
+      "name": "Loop Over Items1"
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "databaseId": 102,
+        "tableId": 549,
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": 5052,
+              "fieldValue": "={{ $('Loop Over Items').first().json.siteName }}"
+            },
+            {
+              "fieldId": 5053,
+              "fieldValue": "={{ $('Loop Over Items').first().json.dispositivo }}"
+            },
+            {
+              "fieldId": 5054,
+              "fieldValue": "={{ $('Loop Over Items').first().json.wan }}"
+            },
+            {
+              "fieldId": 5055,
+              "fieldValue": "={{ $('Loop Over Items').first().json.isp }}"
+            },
+            {
+              "fieldId": 5056,
+              "fieldValue": "={{ $('Loop Over Items').first().json.porta }}"
+            },
+            {
+              "fieldId": 5057,
+              "fieldValue": "={{ $('Loop Over Items').first().json.status }}"
+            },
+            {
+              "fieldId": 5058,
+              "fieldValue": "={{ $('Loop Over Items').first().json.horario }}"
+            },
+            {
+              "fieldId": 5059,
+              "fieldValue": "={{ $('Loop Over Items').first().json.wan_reserva ?? '' }}"
+            },
+            {
+              "fieldId": 5060,
+              "fieldValue": "={{ $('Loop Over Items').first().json.isp_reserva ?? '' }}"
+            },
+            {
+              "fieldId": 5061,
+              "fieldValue": "={{ $json.ticket.ticket_number }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.baserow",
+      "typeVersion": 1,
+      "position": [
+        2032,
+        736
+      ],
+      "id": "c5b1d077-5f1e-410f-b815-38e84b062f1b",
+      "name": "Alertas WAN Down",
+      "credentials": {
+        "baserowApi": {
+          "id": "LyshtardH2v1IIbJ",
+          "name": "Baserow itease"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "databaseId": 102,
+        "tableId": 551,
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": 5065,
+              "fieldValue": "={{ $('Loop Over Items1').first().json.siteName }}"
+            },
+            {
+              "fieldId": 5066,
+              "fieldValue": "={{ $('Loop Over Items1').first().json.dispositivo }}"
+            },
+            {
+              "fieldId": 5067,
+              "fieldValue": "={{ $('Loop Over Items1').first().json.wan }}"
+            },
+            {
+              "fieldId": 5068,
+              "fieldValue": "={{ $('Loop Over Items1').first().json.isp }}"
+            },
+            {
+              "fieldId": 5069,
+              "fieldValue": "={{ $('Loop Over Items1').first().json.porta }}"
+            },
+            {
+              "fieldId": 5070,
+              "fieldValue": "={{ $('Loop Over Items1').first().json.status }}"
+            },
+            {
+              "fieldId": 5071,
+              "fieldValue": "={{ $('Loop Over Items1').first().json.horario }}"
+            },
+            {
+              "fieldId": 5072,
+              "fieldValue": "={{ $('Loop Over Items1').first().json.wan_reserva ?? '' }}"
+            },
+            {
+              "fieldId": 5073,
+              "fieldValue": "={{ $('Loop Over Items1').first().json.isp_reserva ?? '' }}"
+            },
+            {
+              "fieldId": 5074,
+              "fieldValue": "={{ $('Prepara Fechamento').first().json.ticket_number }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.baserow",
+      "typeVersion": 1,
+      "position": [
+        2000,
+        1056
+      ],
+      "id": "d27cabb1-234b-41b0-9e34-f8b01ed1f822",
+      "name": "Alertas WAN Restored",
+      "credentials": {
+        "baserowApi": {
+          "id": "djWHs07uhJVwiQgu",
+          "name": "Baserow Itease"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "amount": 20
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        704,
+        1056
+      ],
+      "id": "ba6c2405-06be-4d73-b977-de7b638b2741",
+      "name": "Wait",
+      "webhookId": "153e3fa2-7e74-47d0-8f4b-cd8122a3dc92"
+    },
+    {
+      "parameters": {
+        "databaseId": 102,
+        "tableId": 549,
+        "returnAll": true,
+        "additionalOptions": {
+          "filters": {
+            "fields": [
+              {
+                "field": 5053,
+                "value": "={{ $('Loop Over Items1').item.json.dispositivo }}"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.baserow",
+      "typeVersion": 1,
+      "position": [
+        912,
+        1056
+      ],
+      "id": "314ca73f-e680-4f4d-81c2-60cf1fc351e7",
+      "name": "Get many rows",
+      "credentials": {
+        "baserowApi": {
+          "id": "djWHs07uhJVwiQgu",
+          "name": "Baserow Itease"
+        }
+      }
+    }
+  ],
+  "pinData": {
+    "Schedule Trigger": [
+      {
+        "json": {
+          "timestamp": "2026-05-22T10:37:34.015-04:00",
+          "Readable date": "May 22nd 2026, 10:37:34 am",
+          "Readable time": "10:37:34 am",
+          "Day of week": "Friday",
+          "Year": "2026",
+          "Month": "May",
+          "Day of month": "22",
+          "Hour": "10",
+          "Minute": "37",
+          "Second": "34",
+          "Timezone": "America/New_York (UTC-04:00)"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "connections": {
+    "É alerta UniFi?": {
+      "main": [
+        [
+          {
+            "node": "Parsear Alerta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Split Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out": {
+      "main": [
+        [
+          {
+            "node": "É alerta UniFi?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DOWN ou RESTORED?": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Loop Over Items1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pegar Clientes Tiflux": {
+      "main": [
+        [
+          {
+            "node": "Filtra Empresa",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtra Empresa": {
+      "main": [
+        [
+          {
+            "node": "Solicitantes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Solicitantes": {
+      "main": [
+        [
+          {
+            "node": "Acha Solicitante",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Acha Solicitante": {
+      "main": [
+        [
+          {
+            "node": "Une Infos DOWN",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Une Infos DOWN": {
+      "main": [
+        [
+          {
+            "node": "Criar Ticket - DOWN",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Criar Ticket - DOWN": {
+      "main": [
+        [
+          {
+            "node": "Alertas WAN Down",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepara Fechamento": {
+      "main": [
+        [
+          {
+            "node": "Classificar Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classificar Ticket": {
+      "main": [
+        [
+          {
+            "node": "Apontamento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apontamento": {
+      "main": [
+        [
+          {
+            "node": "Fechar Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fechar Ticket": {
+      "main": [
+        [
+          {
+            "node": "Alertas WAN Restored",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parsear Alerta": {
+      "main": [
+        [
+          {
+            "node": "DOWN ou RESTORED?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Pegar Clientes Tiflux",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items1": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marcar Lido (DOWN)": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Alertas WAN Down": {
+      "main": [
+        [
+          {
+            "node": "Marcar Lido (DOWN)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Alertas WAN Restored": {
+      "main": [
+        [
+          {
+            "node": "Marcar Lido (RESTORED)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marcar Lido (RESTORED)": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Get many rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many rows": {
+      "main": [
+        [
+          {
+            "node": "Prepara Fechamento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "9387177f-8b8c-4960-956d-f4e6459bad5c",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "185ba077e1c7b20c2b36283e5c616bb88d4b39bfffda32bf938f85eecc433603"
+  },
+  "id": "nJkP03M6gRHuhSa8HWD5D",
+  "tags": []
+}

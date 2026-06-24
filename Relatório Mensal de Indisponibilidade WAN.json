@@ -1,0 +1,324 @@
+{
+  "name": "Relatório Mensal de Indisponibilidade WAN",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "months",
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -48,
+        0
+      ],
+      "id": "f8a85721-0b77-4fd1-b3cd-e350f97901ca",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Referencia cada nó pelo nome exato que aparece no seu canvas\nconst down         = $('Buscar os Alertas WAN Down').all().map(i => i.json);\nconst restored     = $('Buscar os Alertas WAN Restored').all().map(i => i.json);\nconst dispositivos = $('Get many rows').all().map(i => i.json);\n\n// Mês atual para teste\nconst agora  = new Date();\nconst mesRef = agora.getMonth() === 0 ? 11 : agora.getMonth() - 1;\nconst anoRef = agora.getMonth() === 0 ? agora.getFullYear() - 1 : agora.getFullYear();\n\nfunction parseHorario(str) {\n  if (!str) return null;\n  if (str.includes('T')) return new Date(str);\n  const match = str.match(/(\\d{2})\\/(\\d{2})\\/(\\d{2}),\\s*(\\d{2}):(\\d{2}):(\\d{2})/);\n  if (!match) return null;\n  const [_, dd, mm, yy, hh, mi, ss] = match;\n  return new Date(`20${yy}-${mm}-${dd}T${hh}:${mi}:${ss}`);\n}\n\nfunction noMes(dateStr) {\n  const d = parseHorario(dateStr);\n  if (!d) return false;\n  return d.getMonth() === mesRef && d.getFullYear() === anoRef;\n}\n\nconst downFiltrado         = down.filter(r => noMes(r['Horario']));\nconst restoredFiltrado     = restored.filter(r => noMes(r['Horario']));\nconst dispositivosFiltrado = dispositivos.filter(r => noMes(r['Created On']));\n\nreturn [{\n  json: {\n    down: downFiltrado,\n    restored: restoredFiltrado,\n    dispositivos: dispositivosFiltrado,\n    mesRef,\n    anoRef,\n    _totais: {\n      down: down.length,\n      restored: restored.length,\n      dispositivos: dispositivos.length\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1456,
+        0
+      ],
+      "id": "36e9fb26-c940-4392-b173-40fb939c9dbe",
+      "name": "Filtrar Mês"
+    },
+    {
+      "parameters": {
+        "jsCode": "const { down, restored, dispositivos, mesRef, anoRef } = $input.first().json;\n\nfunction parseHorario(str) {\n  if (!str) return null;\n  if (str.includes('T')) return new Date(str);\n  const match = str.match(/(\\d{2})\\/(\\d{2})\\/(\\d{2}),\\s*(\\d{2}):(\\d{2}):(\\d{2})/);\n  if (!match) return null;\n  const [_, dd, mm, yy, hh, mi, ss] = match;\n  return new Date(`20${yy}-${mm}-${dd}T${hh}:${mi}:${ss}`);\n}\n\nfunction formatarDuracao(ms) {\n  if (!ms || ms <= 0) return '—';\n  const h = Math.floor(ms / 3600000);\n  const m = Math.floor((ms % 3600000) / 60000);\n  return h > 0 ? `${h}h ${m}min` : `${m}min`;\n}\n\n// Cria índice de restored por Ticket para busca rápida\nconst restoredPorTicket = {};\nfor (const r of restored) {\n  if (r['Ticket']) restoredPorTicket[String(r['Ticket'])] = r;\n}\n\nfunction encontrarRestored(evento) {\n  const match = restoredPorTicket[String(evento['Ticket'])];\n  if (match) return match;\n  const queda = parseHorario(evento['Horario']);\n  if (!queda) return null;\n  const candidatos = restored\n    .filter(r =>\n      r['Dispositivos'] === evento['Dispositivos'] &&\n      r['WAN'] === evento['WAN'] &&\n      parseHorario(r['Horario']) > queda\n    )\n    .sort((a, b) => parseHorario(a['Horario']) - parseHorario(b['Horario']));\n  return candidatos[0] || null;\n}\n\n// Monta estrutura: empresa → CGU → link → incidentes\nconst empresas = {};\n\nfor (const evento of down) {\n  // Ignora status que não são quedas reais\n  if (!['DOWN', 'FAILOVER'].includes(evento['Status'])) continue;\n\n  const cliente = evento['Cliente'] || 'Sem Cliente';\n  const cgu     = evento['Dispositivos'] || 'Sem Dispositivo';\n  const link    = evento['WAN'] || 'WAN desconhecida';\n  const isp     = evento['ISP'] || '';\n  const queda   = parseHorario(evento['Horario']);\n  const rest    = encontrarRestored(evento);\n  const restauracao = rest ? parseHorario(rest['Horario']) : null;\n  const duracao = (queda && restauracao && restauracao > queda)\n    ? (restauracao - queda)\n    : null;\n\n  if (!empresas[cliente]) empresas[cliente] = {};\n  if (!empresas[cliente][cgu]) empresas[cliente][cgu] = {};\n  if (!empresas[cliente][cgu][link]) {\n    empresas[cliente][cgu][link] = { isp, totalMs: 0, maiorMs: 0, incidentes: 0 };\n  }\n\n  empresas[cliente][cgu][link].incidentes += 1;\n  if (duracao) {\n    empresas[cliente][cgu][link].totalMs += duracao;\n    if (duracao > empresas[cliente][cgu][link].maiorMs) {\n      empresas[cliente][cgu][link].maiorMs = duracao;\n    }\n  }\n}\n\n// Formata resultado\nconst resultado = {};\nfor (const [empresa, cgus] of Object.entries(empresas)) {\n  resultado[empresa] = {};\n  for (const [cgu, links] of Object.entries(cgus)) {\n    let totalCguMs = 0;\n    const linksFormatados = {};\n    for (const [link, dados] of Object.entries(links)) {\n      totalCguMs += dados.totalMs;\n      linksFormatados[link] = {\n        isp: dados.isp,\n        totalOffline: formatarDuracao(dados.totalMs),\n        maiorOffline: formatarDuracao(dados.maiorMs),\n        incidentes: dados.incidentes\n      };\n    }\n    resultado[empresa][cgu] = {\n      totalOffline: formatarDuracao(totalCguMs),\n      links: linksFormatados\n    };\n  }\n}\n\nconst meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',\n                'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];\n\nreturn [{ json: { dados: resultado, mesNome: meses[mesRef], anoRef } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1664,
+        0
+      ],
+      "id": "2d692b21-e075-4090-9cbf-b65463627a14",
+      "name": "Calcular Downtime"
+    },
+    {
+      "parameters": {
+        "jsCode": "const { dados, mesNome, anoRef } = $input.first().json;\n\nlet corpoEmpresas = '';\n\nfor (const [empresa, cgus] of Object.entries(dados)) {\n  let blocosCgu = '';\n\n  for (const [cgu, infoCgu] of Object.entries(cgus)) {\n    let linhasLinks = '';\n    for (const [link, info] of Object.entries(infoCgu.links)) {\n      linhasLinks += `\n        <tr>\n          <td style=\"padding:10px 16px; border-bottom:1px solid #f0f0f0; font-weight:600; color:#1a1a2e;\">${link}</td>\n          <td style=\"padding:10px 16px; border-bottom:1px solid #f0f0f0; color:#555;\">${info.isp}</td>\n          <td style=\"padding:10px 16px; border-bottom:1px solid #f0f0f0; text-align:center;\">\n            <span style=\"background:#e8f4fd; color:#2980b9; padding:3px 10px; border-radius:12px; font-size:13px; font-weight:600;\">${info.incidentes}</span>\n          </td>\n          <td style=\"padding:10px 16px; border-bottom:1px solid #f0f0f0; color:#e67e22; font-weight:600;\">${info.maiorOffline}</td>\n          <td style=\"padding:10px 16px; border-bottom:1px solid #f0f0f0; color:#c0392b; font-weight:700;\">${info.totalOffline}</td>\n        </tr>`;\n    }\n\n    blocosCgu += `\n      <div style=\"margin-bottom:20px; border-radius:10px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,0.07);\">\n        <div style=\"background:linear-gradient(135deg,#2c3e50,#3d5166); padding:12px 18px; display:flex; justify-content:space-between; align-items:center;\">\n          <span style=\"color:#fff; font-weight:700; font-size:15px;\">📡 ${cgu}</span>\n          <span style=\"background:rgba(255,255,255,0.15); color:#fff; padding:4px 12px; border-radius:20px; font-size:13px;\">\n            Total: <strong>${infoCgu.totalOffline}</strong>\n          </span>\n        </div>\n        <table width=\"100%\" cellspacing=\"0\" style=\"border-collapse:collapse; background:#fff;\">\n          <thead>\n            <tr style=\"background:#f8f9fa;\">\n              <th style=\"padding:10px 16px; text-align:left; font-size:12px; color:#888; text-transform:uppercase; letter-spacing:0.5px;\">WAN</th>\n              <th style=\"padding:10px 16px; text-align:left; font-size:12px; color:#888; text-transform:uppercase; letter-spacing:0.5px;\">ISP</th>\n              <th style=\"padding:10px 16px; text-align:center; font-size:12px; color:#888; text-transform:uppercase; letter-spacing:0.5px;\">Quedas</th>\n              <th style=\"padding:10px 16px; text-align:left; font-size:12px; color:#888; text-transform:uppercase; letter-spacing:0.5px;\">Maior Queda</th>\n              <th style=\"padding:10px 16px; text-align:left; font-size:12px; color:#888; text-transform:uppercase; letter-spacing:0.5px;\">Total Offline</th>\n            </tr>\n          </thead>\n          <tbody>${linhasLinks}</tbody>\n        </table>\n      </div>`;\n  }\n\n  corpoEmpresas += `\n    <div style=\"margin-bottom:36px;\">\n      <div style=\"background:linear-gradient(135deg,#1a252f,#2c3e50); padding:16px 22px; border-radius:10px; margin-bottom:14px; display:flex; align-items:center; gap:10px;\">\n        <span style=\"font-size:20px;\">🏢</span>\n        <span style=\"color:#fff; font-size:18px; font-weight:700;\">${empresa}</span>\n      </div>\n      ${blocosCgu}\n    </div>`;\n}\n\nconst html = `<!DOCTYPE html>\n<html>\n<head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"></head>\n<body style=\"margin:0; padding:0; background:#eef2f7; font-family:'Segoe UI',Arial,sans-serif;\">\n  <div style=\"max-width:680px; margin:32px auto; background:#eef2f7;\">\n\n    <!-- Header -->\n    <div style=\"background:linear-gradient(135deg,#0f2027,#203a43,#2c5364); border-radius:14px 14px 0 0; padding:32px 32px 24px;\">\n      <div style=\"color:#7fb3d3; font-size:12px; text-transform:uppercase; letter-spacing:2px; margin-bottom:6px;\">Relatório Mensal</div>\n      <h1 style=\"color:#ffffff; margin:0; font-size:24px; font-weight:700;\">Indisponibilidade WAN</h1>\n      <div style=\"color:#a8c8e0; margin-top:6px; font-size:15px;\">${mesNome} / ${anoRef}</div>\n    </div>\n\n    <!-- Body -->\n    <div style=\"background:#fff; padding:28px 32px; border-radius:0 0 14px 14px; box-shadow:0 4px 20px rgba(0,0,0,0.08);\">\n      ${corpoEmpresas || '<p style=\"color:#999; text-align:center; padding:40px 0;\">Nenhum evento registrado no período.</p>'}\n    </div>\n\n    <!-- Footer -->\n    <div style=\"text-align:center; padding:16px; color:#aaa; font-size:12px;\">\n      Gerado automaticamente em ${new Date().toLocaleString('pt-BR')} · iTease Automação\n    </div>\n  </div>\n</body>\n</html>`;\n\nreturn [{ json: { html, mesNome, anoRef } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1872,
+        0
+      ],
+      "id": "0905f80a-53bc-48c0-92db-78d1e8b95224",
+      "name": "Gerar HTML"
+    },
+    {
+      "parameters": {
+        "fromEmail": "noreply@notifications.itease.com.br",
+        "toEmail": "=thais.romeo@itease.com.br",
+        "subject": "=Relatório UniFi — {{ $json.mesNome }} / {{ $json.anoRef }}",
+        "html": "={{ $json.html }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        2080,
+        0
+      ],
+      "id": "ff3c344e-7655-41c8-b060-2b440d0bd1ac",
+      "name": "Enviar o E-mail",
+      "webhookId": "cf30471f-b1ea-481c-9a1a-93fd9c5a0f47",
+      "credentials": {
+        "smtp": {
+          "id": "uL0IJTXM6hMteM7r",
+          "name": "Resend - Thais"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "databaseId": 102,
+        "tableId": 549,
+        "returnAll": true,
+        "additionalOptions": {}
+      },
+      "type": "n8n-nodes-base.baserow",
+      "typeVersion": 1,
+      "position": [
+        208,
+        0
+      ],
+      "id": "31e5fc58-8e92-4d22-b200-32d10342b45d",
+      "name": "Buscar os Alertas WAN Down",
+      "credentials": {
+        "baserowApi": {
+          "id": "djWHs07uhJVwiQgu",
+          "name": "Baserow Itease"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "databaseId": 102,
+        "tableId": 551,
+        "returnAll": true,
+        "additionalOptions": {
+          "filterType": "AND"
+        }
+      },
+      "type": "n8n-nodes-base.baserow",
+      "typeVersion": 1,
+      "position": [
+        640,
+        0
+      ],
+      "id": "187a9b0e-c496-4c19-94e4-8a2849031441",
+      "name": "Buscar os Alertas WAN Restored",
+      "credentials": {
+        "baserowApi": {
+          "id": "djWHs07uhJVwiQgu",
+          "name": "Baserow Itease"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "databaseId": 103,
+        "tableId": 557,
+        "returnAll": true,
+        "additionalOptions": {}
+      },
+      "type": "n8n-nodes-base.baserow",
+      "typeVersion": 1,
+      "position": [
+        1264,
+        0
+      ],
+      "id": "27864e7c-b825-423c-88a4-d7726350c39f",
+      "name": "Get many rows",
+      "credentials": {
+        "baserowApi": {
+          "id": "djWHs07uhJVwiQgu",
+          "name": "Baserow Itease"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.removeDuplicates",
+      "typeVersion": 2,
+      "position": [
+        1056,
+        0
+      ],
+      "id": "e7f30503-fe76-4a0c-ba3c-91ed0e984b91",
+      "name": "Remove Duplicates1"
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        416,
+        0
+      ],
+      "id": "fe177936-ab61-4bc9-82ee-ed3e4b81c862",
+      "name": "Aggregate"
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        848,
+        0
+      ],
+      "id": "484b3e24-a02d-4443-974b-2358aade4857",
+      "name": "Aggregate1"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Buscar os Alertas WAN Down",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtrar Mês": {
+      "main": [
+        [
+          {
+            "node": "Calcular Downtime",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calcular Downtime": {
+      "main": [
+        [
+          {
+            "node": "Gerar HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gerar HTML": {
+      "main": [
+        [
+          {
+            "node": "Enviar o E-mail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar os Alertas WAN Down": {
+      "main": [
+        [
+          {
+            "node": "Aggregate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar os Alertas WAN Restored": {
+      "main": [
+        [
+          {
+            "node": "Aggregate1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many rows": {
+      "main": [
+        [
+          {
+            "node": "Filtrar Mês",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Remove Duplicates1": {
+      "main": [
+        [
+          {
+            "node": "Get many rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate": {
+      "main": [
+        [
+          {
+            "node": "Buscar os Alertas WAN Restored",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate1": {
+      "main": [
+        [
+          {
+            "node": "Remove Duplicates1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "39b94967-e2ab-43ea-a42e-7f5d349cdc96",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "185ba077e1c7b20c2b36283e5c616bb88d4b39bfffda32bf938f85eecc433603"
+  },
+  "id": "0NnLySsKHFhqDY4PCh9R7",
+  "tags": []
+}

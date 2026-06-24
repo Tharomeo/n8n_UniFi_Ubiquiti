@@ -1,0 +1,817 @@
+{
+  "name": "CGU_Monitoramento",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -16,
+        880
+      ],
+      "id": "36fd311f-6e7d-4b84-be5e-ba6161a3828f",
+      "name": "Schedule Trigger1"
+    },
+    {
+      "parameters": {
+        "url": "https://api.ui.com/v1/hosts",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-KEY",
+              "value": "F8ZvNVVkaDyKfK6HeOZM6RO4iNaPNQzC"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        160,
+        880
+      ],
+      "id": "b625a8b4-4217-435c-9d44-e56278b2d680",
+      "name": "GetUbiquitiDevices1",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "246ecf41-eb21-4a5a-8b24-a44914055694",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "disconnected",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        992,
+        896
+      ],
+      "id": "deec9fa0-e956-4449-abb4-b1812eea7190",
+      "name": "FiltraOffline1"
+    },
+    {
+      "parameters": {
+        "databaseId": 103,
+        "tableId": 557,
+        "returnAll": true,
+        "additionalOptions": {
+          "filters": {
+            "fields": [
+              {
+                "field": 5102,
+                "value": "={{ $json.device_id }}"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.baserow",
+      "typeVersion": 1,
+      "position": [
+        1184,
+        800
+      ],
+      "id": "aa8e55d6-b87c-4a81-a087-e0aff67de118",
+      "name": "Puxa Dados Tabela Off",
+      "alwaysOutputData": true,
+      "credentials": {
+        "baserowApi": {
+          "id": "LyshtardH2v1IIbJ",
+          "name": "Baserow itease"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "73986506-4450-482b-930e-f9da4f884b41",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": 1,
+              "operator": {
+                "type": "number",
+                "operation": "empty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1360,
+        800
+      ],
+      "id": "11fae6e4-e8f9-445d-9658-f9b526aaf8d0",
+      "name": "Verifica Se Já Foi Enviado Aviso1"
+    },
+    {
+      "parameters": {
+        "databaseId": 103,
+        "tableId": 557,
+        "returnAll": true,
+        "additionalOptions": {
+          "filters": {
+            "fields": [
+              {
+                "field": 5102,
+                "value": "={{ $json.device_id }}"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.baserow",
+      "typeVersion": 1,
+      "position": [
+        1168,
+        1024
+      ],
+      "id": "4ba7f97c-8747-49a5-a499-10f8d7247c5e",
+      "name": "Verifica Restauracao1",
+      "alwaysOutputData": true,
+      "credentials": {
+        "baserowApi": {
+          "id": "djWHs07uhJVwiQgu",
+          "name": "Baserow Itease"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://api.tiflux.com/api/v2/clients",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "limit",
+              "value": "200"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "6cb339b5-d8b1-4628-9d21-b075b2f29fbe",
+      "name": "Pegar Clientes Tiflux",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        368,
+        880
+      ],
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "JVeFJM1a0e3yFaeZ",
+          "name": "Tiflux"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://api.tiflux.com/api/v2/clients/{{ $('FiltraOffline1').item.json.client_id }}/requestors",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "limit",
+              "value": "200"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "2dc22791-d69c-484e-b385-b8b0ebd67f86",
+      "name": "Solicitantes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1568,
+        784
+      ],
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "JVeFJM1a0e3yFaeZ",
+          "name": "Tiflux"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const emailAlvo = $('Loop Over Items1').first().json.email_solicitante;\n\n// O HTTP node retorna o array inteiro como items[0].json\nconst lista = Array.isArray(items[0].json) ? items[0].json : items.map(i => i.json);\n\nconst usuario = lista.find(u =>\n  u.email && u.email.toLowerCase().trim() === emailAlvo.toLowerCase().trim()\n);\n\nif (usuario) {\n  return [{ json: { ...usuario } }];\n} else {\n  return [{ json: { erro: 'SOLICITANTE_NAO_ENCONTRADO', email_tentado: emailAlvo } }];\n}"
+      },
+      "id": "335af170-cfc4-4529-931f-32c389a02c3a",
+      "name": "Acha Solicitante",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1744,
+        784
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.tiflux.com/api/v2/tickets",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "title",
+              "value": "=Dispositivo Offline - {{ $('Loop Over Items1').first().json.nome }}"
+            },
+            {
+              "name": "description",
+              "value": "=Dispositivo {{ $('Loop Over Items1').first().json.nome }} está sem comunicação com a Ubiquiti.\n\nHorário da detecção: {{ $now.setZone('America/Sao_Paulo').toFormat('dd/MM/yyyy HH:mm') }}\n\nChamado será fechado automaticamente quando o dispositivo restabelecer conexão."
+            },
+            {
+              "name": "client_id",
+              "value": "={{ $('Loop Over Items1').first().json.client_id }}"
+            },
+            {
+              "name": "desk_id",
+              "value": "68131"
+            },
+            {
+              "name": "priority_id",
+              "value": "=217041"
+            },
+            {
+              "name": "requestor_id",
+              "value": "={{ $('Acha Solicitante').first().json.id }}"
+            },
+            {
+              "name": "stage_id",
+              "value": "411395"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "871126f6-b475-4653-a0ee-0e09b8bdd713",
+      "name": "Criar Ticket - DOWN",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1920,
+        784
+      ],
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "JVeFJM1a0e3yFaeZ",
+          "name": "Tiflux"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const dadosDevice = $('Loop Over Items1').first().json;\nconst registro = $('Verifica Restauracao1').first().json;\n\nconst ticketNumber = registro.Ticket; // campo correto no Baserow\n\nif (!ticketNumber) return [];\n\nconst dataAgora = new Date().toLocaleDateString('pt-BR', {\n  timeZone: 'America/Sao_Paulo',\n  year: 'numeric', month: '2-digit', day: '2-digit'\n}).split('/').reverse().join('-');\n\nreturn [{\n  json: {\n    ...dadosDevice,\n    ticket_number:         ticketNumber,\n    apontamento_date:      dataAgora,\n    descricao_apontamento: `Dispositivo ${dadosDevice.nome} restabeleceu conexão com a Ubiquiti.`,\n  }\n}];"
+      },
+      "id": "3b9da358-d556-48cb-9558-ba0034005886",
+      "name": "Prepara Fechamento",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1552,
+        1008
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://api.tiflux.com/api/v2/tickets/{{ $json.ticket_number }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "services_catalogs_item_id",
+              "value": "1387978"
+            },
+            {
+              "name": "stage_id",
+              "value": "=411395"
+            },
+            {
+              "name": "responsible_id",
+              "value": "1015314"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "31eb1372-8de9-4272-8dc9-3c77e3130fb8",
+      "name": "Classificar Ticket",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1744,
+        1008
+      ],
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "JVeFJM1a0e3yFaeZ",
+          "name": "Tiflux"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.tiflux.com/api/v2/tickets/{{ $('Prepara Fechamento').item.json.ticket_number }}/appointments",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "date",
+              "value": "={{ $('Prepara Fechamento').item.json.apontamento_date }}"
+            },
+            {
+              "name": "init_time",
+              "value": "={{ $now.setZone('America/Sao_Paulo').minus({ minutes: 15 }).toFormat('HH:mm') }}"
+            },
+            {
+              "name": "end_time",
+              "value": "={{ $now.setZone('America/Sao_Paulo').toFormat('HH:mm') }}"
+            },
+            {
+              "name": "description",
+              "value": "=Dispositivo UCG Conectado Novamente {{ $('Prepara Fechamento').item.json.descricao_apontamento }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d99167f6-0010-4811-9879-1f991c582984",
+      "name": "Apontamento",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1968,
+        1008
+      ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "JVeFJM1a0e3yFaeZ",
+          "name": "Tiflux"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://api.tiflux.com/api/v2/tickets/{{ $('Prepara Fechamento').item.json.ticket_number }}/close",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "options": {}
+      },
+      "id": "14cfb05f-1ef3-4ca5-95c4-10fdcf899930",
+      "name": "Fechar Ticket",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        2176,
+        1008
+      ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "JVeFJM1a0e3yFaeZ",
+          "name": "Tiflux"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const devices = $node[\"GetUbiquitiDevices1\"].json.data;\nconst clientes = $('Pegar Clientes Tiflux').all().map(i => i.json);\n\nconst correcao_nomes = {\n  \"Nakayoshi\":                        \"Loja Nakayoshi\",\n  \"UCG Ultra - Antares\":              \"Antares Ambiental\",\n  \"UCG Ultra - Arquitetura Kids\":     \"Arquitetura Kids\",\n  \"UCG Ultra - CDias (Galpão 1)\":     \"CDias Engenharia\",\n  \"UCG Ultra - CDias (Galpão 2)\":     \"CDias Engenharia\",\n  \"UCG Ultra - CDias (Galpão 3)\":     \"CDias Engenharia\",\n  \"UCG Ultra - Centerbor\":            \"Centerbor\",\n  \"UCG Ultra - Centerplast\":          \"Centerplast\",\n  \"UCG Ultra - CFS\":                  \"CFS do Brasil\",\n  \"UCG Ultra - COPI Gestão\":          \"Copi Gestao Empresarial Ltda\",\n  \"UCG Ultra - Grupo AL2\":            \"Grupo AL2\",\n  \"UCG Ultra - HOMOLOGACAO\":          \"iTease Soluções em TI\",\n  \"UCG Ultra - iTease\":               \"iTease Soluções em TI\",\n  \"UCG Ultra - iTease DC\":            \"iTease Soluções em TI\",\n  \"UCG Ultra - Lógica Empreendiment\": \"Lógica Empreendimentos\",\n  \"UCG Ultra - M1 Tecnologia\":        \"M1 Tecnologia\",\n  \"UCG Ultra - Megaplasma\":           \"Megaplasma\",\n  \"UCG Ultra - Pecht Contabil\":       \"Pecht Contábil\",\n  \"UCG Ultra - Reinaflex (Filial)\":   \"Reinaflex\",\n  \"UCG Ultra - Reinaflex (Matriz)\":   \"Reinaflex\",\n  \"UCG Ultra - Samba Workspaces\":     \"Samba Workspaces\",\n  \"UCG Ultra - São Paulo 2\":          \"LONGITUDE\",\n  \"UCG Ultra - Urban Square\":         \"Urban Square\",\n  \"UCG Ultra - Vidraçaria São Luiz\":  \"Vidraçaria São Luis\",\n  \"UCG Ultra - Ville de Provence\":    \"Ville de Provence\",\n  \"UCG Ultra - Voilap\":               \"VOILAP BRASIL\",\n  \"UCG Ultra - Woodward\":             \"WoodWard\",\n  \"UCG Ultra - Atiara/Atiluz\":        \"Atiara\",\n  \"UCG Ultra - VisoFlex\":             \"Visoflex\",\n  \"UniFi Controller - Lógica Contabilidade\": \"Logica Contabilidade\",\n  \"UDM  - Amizade (Sumaré)\":          \"LONGITUDE\",\n  \"UDM  - Trend\":                     \"LONGITUDE\",\n  \"UDM - 1° Andar (Indaiatuba)\":      \"LONGITUDE\",\n  \"UDM - ELEV\":                       \"LONGITUDE\",\n  \"UDM - Itaim - Vibe - Zen\":         \"LONGITUDE\",\n  \"UDM - Logica Contabilidade\":       \"Logica Contabilidade\",\n  \"UDM - Longitude Matriz\":           \"LONGITUDE\",\n  \"UDM - Orion - Piracicaba\":         \"LONGITUDE\",\n  \"UDM - PDV Central (São Paulo)\":    \"LONGITUDE\",\n  \"UDM - Solis\":                      \"LONGITUDE\",\n  \"UDM - Sorocaba II\":                \"LONGITUDE\",\n  \"UDM - Villa Home Resort\":          \"LONGITUDE\",\n};\n\nconst excecoes_email = {\n  \"Nakayoshi\":                        \"nakayoshi\",\n  \"UCG Ultra - Antares\":              \"antares\",\n  \"UCG Ultra - Arquitetura Kids\":     \"arquiteturakids\",\n  \"UCG Ultra - CDias (Galpão 1)\":     \"cdias\",\n  \"UCG Ultra - CDias (Galpão 2)\":     \"cdias\",\n  \"UCG Ultra - CDias (Galpão 3)\":     \"cdias\",\n  \"UCG Ultra - Centerbor\":            \"centerbor\",\n  \"UCG Ultra - Centerplast\":          \"centerplast\",\n  \"UCG Ultra - CFS\":                  \"cfsdobrasil\",\n  \"UCG Ultra - COPI Gestão\":          \"copi\",\n  \"UCG Ultra - Grupo AL2\":            \"grupoal2\",\n  \"UCG Ultra - HOMOLOGACAO\":          \"itease\",\n  \"UCG Ultra - iTease\":               \"itease\",\n  \"UCG Ultra - iTease DC\":            \"itease\",\n  \"UCG Ultra - Lógica Empreendiment\": \"logicaempreendimentos\",\n  \"UniFi Controller - Lógica Contabilidade\": \"logica\",\n  \"UCG Ultra - M1 Tecnologia\":        \"m1\",\n  \"UCG Ultra - Megaplasma\":           \"megaplasma\",\n  \"UCG Ultra - Pecht Contabil\":       \"pechtcontabil\",\n  \"UCG Ultra - Reinaflex (Filial)\":   \"reinaflex\",\n  \"UCG Ultra - Reinaflex (Matriz)\":   \"reinaflex\",\n  \"UCG Ultra - Samba Workspaces\":     \"sambaworkspaces\",\n  \"UCG Ultra - São Paulo 2\":          \"longitude\",\n  \"UCG Ultra - Urban Square\":         \"urbansquare\",\n  \"UCG Ultra - Vidraçaria São Luiz\":  \"vidracaria\",\n  \"UCG Ultra - Ville de Provence\":    \"villedeprovence\",\n  \"UCG Ultra - Voilap\":               \"voilap\",\n  \"UCG Ultra - Woodward\":             \"woodward\",\n  \"UCG Ultra - Atiara/Atiluz\":        \"atiara\",\n  \"UCG Ultra - VisoFlex\":             \"visoflex\",\n  \"UDM  - Amizade (Sumaré)\":          \"longitude\",\n  \"UDM  - Trend\":                     \"longitude\",\n  \"UDM - 1° Andar (Indaiatuba)\":      \"longitude\",\n  \"UDM - ELEV\":                       \"longitude\",\n  \"UDM - Itaim - Vibe - Zen\":         \"longitude\",\n  \"UDM - Logica Contabilidade\":       \"logica\",\n  \"UDM - Longitude Matriz\":           \"longitude\",\n  \"UDM - Orion - Piracicaba\":         \"longitude\",\n  \"UDM - PDV Central (São Paulo)\":    \"longitude\",\n  \"UDM - Solis\":                      \"longitude\",\n  \"UDM - Sorocaba II\":                \"longitude\",\n  \"UDM - Villa Home Resort\":          \"longitude\",\n};\n\nfunction limpar(texto) {\n  if (!texto) return '';\n  return texto.toString().toLowerCase()\n    .replace(/&/g, 'e')\n    .normalize('NFD').replace(/[\\u0300-\\u036f]/g, '')\n    .replace(/[\\s\\-\\._]/g, '');\n}\n\nreturn devices.map(device => {\n  const nomeCompleto = device.reportedState.name;\n\n  const nomeBusca = correcao_nomes[nomeCompleto] || nomeCompleto;\n  const nomeAlvoLimpo = limpar(nomeBusca);\n\n  let cliente = clientes.find(c => limpar(c.name) === nomeAlvoLimpo);\n  if (!cliente) {\n    cliente = clientes.find(c => {\n      const n = limpar(c.name);\n      return n.includes(nomeAlvoLimpo) || nomeAlvoLimpo.includes(n);\n    });\n  }\n\n  const apelido = excecoes_email[nomeCompleto] || limpar(nomeCompleto);\n  const emailSolicitante = `rmm.${apelido}@itease.com.br`;\n\n  return {\n    json: {\n      device_id:         device.id,\n      nome:              nomeCompleto,\n      status:            device.reportedState.state,\n      client_id:         cliente ? Number(cliente.id) : null,\n      client_name:       cliente ? cliente.name : null,\n      email_solicitante: emailSolicitante,\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        560,
+        880
+      ],
+      "id": "884c9c70-fd1c-4a44-830a-157a0e2532d9",
+      "name": "formata e match"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        784,
+        880
+      ],
+      "id": "714480ac-2cfb-42fe-b17f-43268347931c",
+      "name": "Loop Over Items1"
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "databaseId": 103,
+        "tableId": 557,
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": 5102,
+              "fieldValue": "={{ $('Loop Over Items1').first().json.device_id }}"
+            },
+            {
+              "fieldId": 5103,
+              "fieldValue": "={{ $('Loop Over Items1').first().json.nome }}"
+            },
+            {
+              "fieldId": 5110,
+              "fieldValue": "={{ $json.ticket.ticket_number }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.baserow",
+      "typeVersion": 1,
+      "position": [
+        2112,
+        784
+      ],
+      "id": "0e7acb21-f5f6-494a-875b-65531facddcb",
+      "name": "Grava UCG Down",
+      "credentials": {
+        "baserowApi": {
+          "id": "djWHs07uhJVwiQgu",
+          "name": "Baserow Itease"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "databaseId": 103,
+        "tableId": 557,
+        "rowId": "={{ $('Verifica Restauracao1').first().json.id }}"
+      },
+      "type": "n8n-nodes-base.baserow",
+      "typeVersion": 1,
+      "position": [
+        2384,
+        1008
+      ],
+      "id": "f4f40bf7-510e-4a0b-a0f1-ecd8a37a90e3",
+      "name": "UCG On",
+      "credentials": {
+        "baserowApi": {
+          "id": "djWHs07uhJVwiQgu",
+          "name": "Baserow Itease"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "1aa78db5-7b9a-4c63-895d-a455c9b82a32",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1360,
+        1024
+      ],
+      "id": "7204790d-c8f3-4abb-9083-0d6e01766ab6",
+      "name": "If"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger1": {
+      "main": [
+        [
+          {
+            "node": "GetUbiquitiDevices1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GetUbiquitiDevices1": {
+      "main": [
+        [
+          {
+            "node": "Pegar Clientes Tiflux",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FiltraOffline1": {
+      "main": [
+        [
+          {
+            "node": "Puxa Dados Tabela Off",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Verifica Restauracao1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Puxa Dados Tabela Off": {
+      "main": [
+        [
+          {
+            "node": "Verifica Se Já Foi Enviado Aviso1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verifica Se Já Foi Enviado Aviso1": {
+      "main": [
+        [
+          {
+            "node": "Solicitantes",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Loop Over Items1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pegar Clientes Tiflux": {
+      "main": [
+        [
+          {
+            "node": "formata e match",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Solicitantes": {
+      "main": [
+        [
+          {
+            "node": "Acha Solicitante",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Acha Solicitante": {
+      "main": [
+        [
+          {
+            "node": "Criar Ticket - DOWN",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Criar Ticket - DOWN": {
+      "main": [
+        [
+          {
+            "node": "Grava UCG Down",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepara Fechamento": {
+      "main": [
+        [
+          {
+            "node": "Classificar Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classificar Ticket": {
+      "main": [
+        [
+          {
+            "node": "Apontamento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apontamento": {
+      "main": [
+        [
+          {
+            "node": "Fechar Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fechar Ticket": {
+      "main": [
+        [
+          {
+            "node": "UCG On",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verifica Restauracao1": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "formata e match": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items1": {
+      "main": [
+        [],
+        [
+          {
+            "node": "FiltraOffline1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Grava UCG Down": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "UCG On": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Prepara Fechamento",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Loop Over Items1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Sao_Paulo",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false,
+    "errorWorkflow": "iNrBLK90jDkNpg5z",
+    "timeSavedMode": "fixed"
+  },
+  "versionId": "ef60ac8d-b0f2-420f-a24f-673087c939c4",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "185ba077e1c7b20c2b36283e5c616bb88d4b39bfffda32bf938f85eecc433603"
+  },
+  "id": "e7BFWD9wssHFOY6q",
+  "tags": []
+}
